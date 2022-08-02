@@ -76,10 +76,11 @@ class TempDir(object):
 def cached_property(getter):
     @wraps(getter)
     def exec_once(self):
-        saved_name = '__%s' % getter.__name__
+        saved_name = f'__{getter.__name__}'
         if not hasattr(self, saved_name):
             setattr(self, saved_name, getter(self))
         return getattr(self, saved_name)
+
     return property(exec_once)
 
 
@@ -92,10 +93,7 @@ def all_equal(it):
         first = next(it)
     except StopIteration:
         return True
-    for x in it:
-        if x != first:
-            return False
-    return True
+    return all(x == first for x in it)
 
 
 def url_quote(url):
@@ -121,7 +119,7 @@ def is_stringish(x):
     """
     Returns true if the object is a unicode or a bytes object
     """
-    return isinstance(x, bytes_type) or isinstance(x, unicode_type)
+    return isinstance(x, (bytes_type, unicode_type))
 
 
 def to_fileobj(x):
@@ -135,10 +133,7 @@ def to_unicode(x):
     """
     Convert any object to a unicode object
     """
-    if isinstance(x, bytes_type):
-        return x.decode('utf-8')
-    else:
-        return unicode_type(x)
+    return x.decode('utf-8') if isinstance(x, bytes_type) else unicode_type(x)
 
 
 def to_bytes(x):
@@ -170,12 +165,11 @@ def get_username():
 
 
 def resolve_identity():
-    prod_token = os.environ.get('METAFLOW_PRODUCTION_TOKEN')
-    if prod_token:
-        return 'production:%s' % prod_token
+    if prod_token := os.environ.get('METAFLOW_PRODUCTION_TOKEN'):
+        return f'production:{prod_token}'
     user = get_username()
     if user and user != 'root':
-        return 'user:%s' % user
+        return f'user:{user}'
     else:
         raise MetaflowUnknownUser()
 
@@ -238,9 +232,9 @@ def compress_list(lst,
                   zlibmarker='!',
                   zlibmin=500):
 
-    bad_items = [x for x in lst
-                 if separator in x or rangedelim in x or zlibmarker in x]
-    if bad_items:
+    if bad_items := [
+        x for x in lst if separator in x or rangedelim in x or zlibmarker in x
+    ]:
         raise MetaflowInternalError("Item '%s' includes a delimiter character "
                                     "so it can't be compressed" % bad_items[0])
     # Three output modes:
@@ -255,14 +249,13 @@ def compress_list(lst,
         res = rangedelim.join((lcp, separator.join(residuals)))
     if len(res) < zlibmin:
         return res
-    else:
-        # 3. zlib-compressed, base64-encoded, prefix-encoded list
+    # 3. zlib-compressed, base64-encoded, prefix-encoded list
 
-        # interestingly, a typical zlib-encoded list of suffixes
-        # has plenty of redundancy. Decoding the data *twice* helps a
-        # lot
-        compressed = zlib.compress(zlib.compress(to_bytes(res)))
-        return zlibmarker + base64.b64encode(compressed).decode('utf-8')
+    # interestingly, a typical zlib-encoded list of suffixes
+    # has plenty of redundancy. Decoding the data *twice* helps a
+    # lot
+    compressed = zlib.compress(zlib.compress(to_bytes(res)))
+    return zlibmarker + base64.b64encode(compressed).decode('utf-8')
 
 def decompress_list(lststr, separator=',', rangedelim=':', zlibmarker='!'):
     # Three input modes:
@@ -273,13 +266,12 @@ def decompress_list(lststr, separator=',', rangedelim=':', zlibmarker='!'):
     else:
         decoded = lststr
 
-    if rangedelim in decoded:
-        prefix, suffixes = decoded.split(rangedelim)
-        # 2. Prefix and a comma-separated list of suffixes
-        return [prefix + suffix for suffix in suffixes.split(separator)]
-    else:
+    if rangedelim not in decoded:
         # 1. Just a comma-separated list
         return decoded.split(separator)
+    prefix, suffixes = decoded.split(rangedelim)
+    # 2. Prefix and a comma-separated list of suffixes
+    return [prefix + suffix for suffix in suffixes.split(separator)]
 
 
 def longest_common_prefix(lst):
@@ -306,7 +298,7 @@ def dict_to_cli_options(params):
             if not isinstance(v, tuple):
                 v = [v]
             for value in v:
-                yield '--%s' % k
+                yield f'--{k}'
                 if not isinstance(value, bool):
                     value = to_unicode(value)
 
@@ -345,10 +337,7 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
         # rather than referring to PATH directories. This includes checking
         # relative to the current directory, e.g. ./script
         if os.path.dirname(cmd):
-            if _access_check(cmd, mode):
-                return cmd
-            return None
-
+            return cmd if _access_check(cmd, mode) else None
         if path is None:
             path = os.environ.get("PATH", os.defpath)
         if not path:

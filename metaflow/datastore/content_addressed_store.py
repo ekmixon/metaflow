@@ -134,8 +134,8 @@ class ContentAddressedStore(object):
                 load_paths.append((key, path))
 
         with self._storage_impl.load_bytes(
-            [p for _, p in load_paths]
-        ) as loaded:
+                [p for _, p in load_paths]
+            ) as loaded:
             for (key, _), (_, file_path, meta) in zip(load_paths, loaded):
                 # At this point, we either return the object as is (if raw) or
                 # decode it according to the encoding version
@@ -150,10 +150,7 @@ class ContentAddressedStore(object):
                         else:
                             version = meta.get("cas_version", -1)
                             if version == -1:
-                                raise DataException(
-                                    "Could not extract encoding version for %s"
-                                    % path
-                                )
+                                raise DataException(f"Could not extract encoding version for {path}")
                             unpack_code = getattr(
                                 self, "_unpack_v%d" % version, None
                             )
@@ -167,7 +164,7 @@ class ContentAddressedStore(object):
                         try:
                             blob = unpack_code(f)
                         except Exception as e:
-                            raise DataException("Could not unpack data: %s" % e)
+                            raise DataException(f"Could not unpack data: {e}")
 
                 if self._blob_cache:
                     self._blob_cache.store_key(key, blob)

@@ -47,17 +47,20 @@ class ProjectDecorator(FlowDecorator):
                                                      options['branch'],
                                                      get_username())
         is_user_branch = options['branch'] is None and not options['production']
-        echo("Project: *%s*, Branch: *%s*" % (project_name, branch_name),
-             fg='magenta',
-             highlight='green')
+        echo(
+            f"Project: *{project_name}*, Branch: *{branch_name}*",
+            fg='magenta',
+            highlight='green',
+        )
+
         current._update_env({'project_name': project_name,
                              'branch_name': branch_name,
                              'is_user_branch': is_user_branch,
                              'is_production': options['production'],
                              'project_flow_name': project_flow_name})
-        metadata.add_sticky_tags(sys_tags=[
-            'project:%s' % project_name,
-            'project_branch:%s' % branch_name])
+        metadata.add_sticky_tags(
+            sys_tags=[f'project:{project_name}', f'project_branch:{branch_name}']
+        )
 
     def get_top_level_options(self):
         return list(self._option_values.items())
@@ -89,16 +92,13 @@ def format_name(flow_name,
             raise MetaflowException("Branch name is too long. "
                                     "The maximum is %d characters."\
                                     % VALID_NAME_LEN)
-        if deploy_prod:
-            branch = 'prod.%s' % given_branch
-        else:
-            branch = 'test.%s' % given_branch
+        branch = f'prod.{given_branch}' if deploy_prod else f'test.{given_branch}'
     elif deploy_prod:
         branch = 'prod'
     else:
         # For AWS Step Functions, we set the branch to the value of
         # environment variable `METAFLOW_OWNER`, since AWS Step Functions
         # has no notion of user name.
-        branch = 'user.%s' % os.environ.get('METAFLOW_OWNER', user_name)
+        branch = f"user.{os.environ.get('METAFLOW_OWNER', user_name)}"
 
     return '.'.join((project_name, branch, flow_name)), branch

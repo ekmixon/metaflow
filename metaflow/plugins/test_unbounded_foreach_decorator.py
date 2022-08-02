@@ -30,9 +30,7 @@ class InternalTestUnboundedForeachInput(UnboundedForeachInput):
 
     def __getitem__(self, key):
         # Add this for the sake of control task.
-        if key is None:
-            return self
-        return self.iterable[key]
+        return self if key is None else self.iterable[key]
 
     def __len__(self):
         return len(self.iterable)
@@ -41,7 +39,7 @@ class InternalTestUnboundedForeachInput(UnboundedForeachInput):
         return str(self.iterable)
 
     def __repr__(self):
-        return '%s(%s)' % (self.NAME, self.iterable)
+        return f'{self.NAME}({self.iterable})'
 
 class InternalTestUnboundedForeachDecorator(StepDecorator):
     name = 'unbounded_test_foreach_internal'
@@ -82,8 +80,8 @@ class InternalTestUnboundedForeachDecorator(StepDecorator):
         foreach_iter = flow.input
         if not isinstance(foreach_iter, InternalTestUnboundedForeachInput):
             raise MetaflowException('Expected type to be '\
-                                    'InternalTestUnboundedForeachInput. Found %s'\
-                                    % (type(foreach_iter)))
+                                        'InternalTestUnboundedForeachInput. Found %s'\
+                                        % (type(foreach_iter)))
         foreach_num_splits = sum(1 for _ in foreach_iter)
 
         print('Simulating UnboundedForeach over value:',
@@ -92,10 +90,10 @@ class InternalTestUnboundedForeachDecorator(StepDecorator):
 
         for i in range(foreach_num_splits):
             task_id = \
-                '%s-%d' % (control_task_id.replace('control-', 'test-ubf-'), i)
-            pathspec = '%s/%s/%s' % (run_id, step_name, task_id)
+                    '%s-%d' % (control_task_id.replace('control-', 'test-ubf-'), i)
+            pathspec = f'{run_id}/{step_name}/{task_id}'
             mapper_tasks.append(to_unicode(pathspec))
-            input_paths = '%s/%s/%s' % (run_id, split_step_name, split_task_id)
+            input_paths = f'{run_id}/{split_step_name}/{split_task_id}'
 
             # Override specific `step` kwargs.
             kwargs = cli_args.step_kwargs
@@ -112,7 +110,7 @@ class InternalTestUnboundedForeachDecorator(StepDecorator):
             # Print cmdline for execution. Doesn't work without the temporary
             # unicode object while using `print`.
             print(u'[${cwd}] Starting split#{split} with cmd:{cmd}'\
-                  .format(cwd=os.getcwd(),
+                      .format(cwd=os.getcwd(),
                           split=i,
                           cmd=step_cli))
             output_bytes = subprocess.check_output(cmd)

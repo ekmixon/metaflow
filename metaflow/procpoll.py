@@ -90,7 +90,7 @@ if __name__ == '__main__':
            p2.stdout.fileno(): ('p2', p2.stdout)}
 
     poll = make_poll()
-    print('poller is %s' % poll)
+    print(f'poller is {poll}')
 
     for fd in fds:
         poll.add(fd)
@@ -99,8 +99,8 @@ if __name__ == '__main__':
     while n > 0:
         for event in poll.poll(0.5):
             name, fileobj = fds[event.fd]
-            print('[%s] %s' % (name, fileobj.readline().strip()))
+            print(f'[{name}] {fileobj.readline().strip()}')
             if event.is_terminated:
-                print('[%s] terminated' % name)
+                print(f'[{name}] terminated')
                 poll.remove(event.fd)
                 n -= 1

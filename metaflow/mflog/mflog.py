@@ -81,8 +81,7 @@ def is_structured(line):
 
 def parse(line):
     line = to_bytes(line)
-    m = LINE_PARSER.match(to_bytes(line))
-    if m:
+    if m := LINE_PARSER.match(to_bytes(line)):
         try:
             fields = list(m.groups())
             fields.append(datetime.strptime(to_unicode(fields[2]), ISOFORMAT))
@@ -103,21 +102,17 @@ def unset_should_persist(line):
     # prior to persisting, the should_persist marker should be removed
     # from the logline using this function
     line = to_bytes(line)
-    if is_structured(line) and line.startswith(b'[!['):
-        return line[2:]
-    else:
-        return line
+    return line[2:] if is_structured(line) and line.startswith(b'[![') else line
 
 def refine(line, prefix=None, suffix=None):
     line = to_bytes(line)
     prefix = to_bytes(prefix) if prefix else b''
     suffix = to_bytes(suffix) if suffix else b''
     parts = line.split(b']', 1)
-    if len(parts) == 2:
-        header, body = parts
-        return b''.join((header, b']', prefix, body, suffix))
-    else:
+    if len(parts) != 2:
         return line
+    header, body = parts
+    return b''.join((header, b']', prefix, body, suffix))
 
 def merge_logs(logs):
     def line_iter(logblob):

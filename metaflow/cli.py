@@ -74,8 +74,7 @@ def echo_always(line, **kwargs):
     bold = kwargs.pop('bold', False)
     kwargs['nl'] = False
     hl = True
-    nobold = kwargs.pop('no_bold', False)
-    if nobold:
+    if nobold := kwargs.pop('no_bold', False):
         click.secho(line, **kwargs)
     else:
         for span in line.split('*'):
@@ -83,12 +82,11 @@ def echo_always(line, **kwargs):
                 hl = False
                 kwargs['fg'] = fg
                 kwargs['bold'] = bold
-                click.secho(span, **kwargs)
             else:
                 hl = True
                 kwargs['fg'] = highlight
                 kwargs['bold'] = hl_bold
-                click.secho(span, **kwargs)
+            click.secho(span, **kwargs)
     if nl:
         kwargs['nl'] = True
         click.secho('', **kwargs)
@@ -102,12 +100,9 @@ def logger(body='',
            bad=False,
            timestamp=True):
     if timestamp:
-        if timestamp is True:
-            dt = datetime.now()
-        else:
-            dt = timestamp
+        dt = datetime.now() if timestamp is True else timestamp
         tstamp = dt.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-        click.secho(tstamp + ' ', fg=LOGGER_TIMESTAMP, nl=False)
+        click.secho(f'{tstamp} ', fg=LOGGER_TIMESTAMP, nl=False)
     if head:
         click.secho(head, fg=LOGGER_COLOR, nl=False)
     click.secho(body,
@@ -141,13 +136,16 @@ def show(obj):
     echo_always('\n%s' % obj.graph.doc)
     for _, node in sorted((n.func_lineno, n) for n in obj.graph):
         echo_always('\nStep *%s*' % node.name, err=False)
-        echo_always(node.doc if node.doc else '?', indent=True, err=False)
+        echo_always(node.doc or '?', indent=True, err=False)
         if node.type != 'end':
-            echo_always('*=>* %s' % ', '.join('*%s*' % n for n in node.out_funcs),
-                        indent=True,
-                        highlight='magenta',
-                        highlight_bold=False,
-                        err=False)
+            echo_always(
+                f"*=>* {', '.join(f'*{n}*' for n in node.out_funcs)}",
+                indent=True,
+                highlight='magenta',
+                highlight_bold=False,
+                err=False,
+            )
+
     echo_always('')
 
 
@@ -251,7 +249,7 @@ def dump(obj,
     if file is not None:
         with open(file, 'wb') as f:
             pickle.dump(output, f, protocol=pickle.HIGHEST_PROTOCOL)
-        echo('Artifacts written to *%s*' % file)
+        echo(f'Artifacts written to *{file}*')
 
 
 @cli.command(help='Show stdout/stderr produced by a task or all tasks in a step. '
@@ -338,9 +336,7 @@ def logs(obj,
                         if timestamps:
                             ts = mflog.utc_to_local(line.utc_tstamp)
                             tstamp = ts.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-                            click.secho(tstamp + ' ',
-                                        fg=LOGGER_TIMESTAMP,
-                                        nl=False)
+                            click.secho(f'{tstamp} ', fg=LOGGER_TIMESTAMP, nl=False)
                         echo_unicode(line.msg)
                     maybe_old_style = False
                 elif maybe_old_style:
@@ -441,10 +437,8 @@ def step(ctx,
     except:
         raise CommandException("Step *%s* doesn't exist." % step_name)
     if not func.is_step:
-        raise CommandException("Function *%s* is not a step." % step_name)
-    echo('Executing a step, *%s*' % step_name,
-         fg='magenta',
-         bold=False)
+        raise CommandException(f"Function *{step_name}* is not a step.")
+    echo(f'Executing a step, *{step_name}*', fg='magenta', bold=False)
 
     if decospecs:
         decorators._attach_decorators_to_step(func, decospecs)
@@ -590,22 +584,21 @@ def resume(obj,
 
     if origin_run_id is None:
         origin_run_id = get_latest_run_id(obj.echo, obj.flow.name)
-        if origin_run_id is None:
-            raise CommandException("A previous run id was not found. Specify --origin-run-id.")
+    if origin_run_id is None:
+        raise CommandException("A previous run id was not found. Specify --origin-run-id.")
 
     if step_to_rerun is None:
         clone_steps = set()
-    else:
-        # validate step name
-        if step_to_rerun not in obj.graph.nodes:
-            raise CommandException(
-                "invalid step name {0} specified, must be step present in "
-                "current form of execution graph. Valid step names include: {1}"
-                .format(
-                    step_to_rerun,
-                    ",".join(list(obj.graph.nodes.keys()))))
+    elif step_to_rerun in obj.graph.nodes:
         clone_steps = {step_to_rerun}
 
+    else:
+        raise CommandException(
+            "invalid step name {0} specified, must be step present in "
+            "current form of execution graph. Valid step names include: {1}"
+            .format(
+                step_to_rerun,
+                ",".join(list(obj.graph.nodes.keys()))))
     runtime = NativeRuntime(obj.flow,
                             obj.graph,
                             obj.flow_datastore,
@@ -784,19 +777,15 @@ def start(ctx,
           monitor=None,
           **deco_options):
     global echo
-    if quiet:
-        echo = echo_dev_null
-    else:
-        echo = echo_always
-
+    echo = echo_dev_null if quiet else echo_always
     ctx.obj.version = metaflow_version.get_version()
     version = ctx.obj.version
     if use_r():
         version = metaflow_r_version()
 
-    echo('Metaflow %s' % version, fg='magenta', bold=True, nl=False)
-    echo(" executing *%s*" % ctx.obj.flow.name, fg='magenta', nl=False)
-    echo(" for *%s*" % resolve_identity(), fg='magenta')
+    echo(f'Metaflow {version}', fg='magenta', bold=True, nl=False)
+    echo(f" executing *{ctx.obj.flow.name}*", fg='magenta', nl=False)
+    echo(f" for *{resolve_identity()}*", fg='magenta')
 
     if coverage:
         from coverage import Coverage
@@ -895,7 +884,7 @@ def _reconstruct_cli(params):
             if not isinstance(v, tuple):
                 v = [v]
             for value in v:
-                yield '--%s' % k
+                yield f'--{k}'
                 if not isinstance(value, bool):
                     yield str(value)
 
@@ -979,11 +968,10 @@ def main(flow, args=None, handle_exceptions=True, entrypoint=None):
             except SystemExit as e:
                 return e.code
     except MetaflowException as x:
-        if handle_exceptions:
-            print_metaflow_exception(x)
-            sys.exit(1)
-        else:
+        if not handle_exceptions:
             raise
+        print_metaflow_exception(x)
+        sys.exit(1)
     except Exception as x:
         if handle_exceptions:
             print_unknown_exception(x)

@@ -53,9 +53,6 @@ def install_conda_environment(env_id, packages):
         cwd = os.getcwd()
         generate_trampolines(cwd)
         # print("Environment escape will use %s as the interpreter" % ENV_ESCAPE_PY)
-    else:
-        pass
-        # print("Could not find a environment escape interpreter")
     os.system(' && '.join(args))
 
 if __name__ == '__main__':

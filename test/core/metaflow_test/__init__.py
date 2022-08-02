@@ -22,7 +22,7 @@ def tag(tagspec, **kwargs):
 def truncate(var):
     var = str(var)
     if len(var) > 500:
-        var = '%s...' % var[:500]
+        var = f'{var[:500]}...'
     return var
 
 class AssertArtifactFailed(Exception):
@@ -34,9 +34,9 @@ class AssertLogFailed(Exception):
 class ExpectationFailed(Exception):
 
     def __init__(self, expected, got):
-        super(ExpectationFailed, self).__init__("Expected result: %s, got %s"\
-                                                % (truncate(expected),
-                                                   truncate(got)))
+        super(ExpectationFailed, self).__init__(
+            f"Expected result: {truncate(expected)}, got {truncate(got)}"
+        )
 
 class ResumeFromHere(MetaflowException):
     headline = "Resume requested"
@@ -95,10 +95,10 @@ class MetaflowCheck(object):
     def cli_options(self):
         return sys.argv[3:]
 
-    def assert_artifact(step, name, value, fields=None):
+    def assert_artifact(self, name, value, fields=None):
         raise NotImplementedError()
 
-    def artifact_dict(step, name):
+    def artifact_dict(self, name):
         raise NotImplementedError()
 
     def assert_log(self, step, logtype, value, exact_match=True):

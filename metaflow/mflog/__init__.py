@@ -44,7 +44,7 @@ BASH_SAVE_LOGS = ' '.join(BASH_SAVE_LOGS_ARGS)
 # and stderr of the given bash expression to mflog.tee
 def bash_capture_logs(bash_expr, var_transform=None):
     if var_transform is None:
-        var_transform = lambda s: '$%s' % s
+        var_transform = lambda s: f'${s}'
     cmd = 'python -m metaflow.mflog.tee %s %s'
     parts = (bash_expr,
              cmd % (TASK_LOG_SOURCE, var_transform('MFLOG_STDOUT')),

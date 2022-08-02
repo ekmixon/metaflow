@@ -35,11 +35,7 @@ def _execute_cmd(func, flow_name, run_id, user, my_runs, echo):
     if my_runs:
         user = util.get_username()
 
-    latest_run = True
-
-    if user and not run_id:
-        latest_run = False
-
+    latest_run = bool(not user or run_id)
     if not run_id and latest_run:
         run_id = util.get_latest_run_id(echo, flow_name)
         if run_id is None:
@@ -149,7 +145,6 @@ def kill(ctx, run_id, user, my_runs):
 )
 @click.option("--max-swap", help="Max Swap requirement for AWS Batch.")
 @click.option("--swappiness", help="Swappiness requirement for AWS Batch.")
-#TODO: Maybe remove it altogether since it's not used here
 @click.option('--ubf-context', default=None, type=click.Choice([None]))
 @click.option('--host-volumes', multiple=True)
 @click.pass_context
@@ -176,7 +171,7 @@ def step(
     def echo(msg, stream="stderr", batch_id=None):
         msg = util.to_unicode(msg)
         if batch_id:
-            msg = "[%s] %s" % (batch_id, msg)
+            msg = f"[{batch_id}] {msg}"
         ctx.obj.echo_always(msg, err=(stream == sys.stderr))
 
     if R.use_r():
@@ -184,7 +179,7 @@ def step(
     else:
         if executable is None:
             executable = ctx.obj.environment.executable(step_name)
-        entrypoint = "%s -u %s" % (executable, os.path.basename(sys.argv[0]))
+        entrypoint = f"{executable} -u {os.path.basename(sys.argv[0])}"
 
     top_args = " ".join(util.dict_to_cli_options(ctx.parent.parent.params))
 
@@ -197,7 +192,7 @@ def step(
             % (i // max_size): input_paths[i : i + max_size]
             for i in range(0, len(input_paths), max_size)
         }
-        kwargs["input_paths"] = "".join("${%s}" % s for s in split_vars.keys())
+        kwargs["input_paths"] = "".join("${%s}" % s for s in split_vars)
 
     step_args = " ".join(util.dict_to_cli_options(kwargs))
     step_cli = u"{entrypoint} {top_args} step {step} {step_args}".format(
@@ -225,18 +220,14 @@ def step(
         "task_id": kwargs["task_id"],
         "retry_count": str(retry_count),
     }
-    attrs = {"metaflow.%s" % k: v for k, v in task_spec.items()}
+    attrs = {f"metaflow.{k}": v for k, v in task_spec.items()}
     attrs["metaflow.user"] = util.get_username()
     attrs["metaflow.version"] = ctx.obj.environment.get_environment_info()[
         "metaflow_version"
     ]
 
     env_deco = [deco for deco in node.decorators if deco.name == "environment"]
-    if env_deco:
-        env = env_deco[0].attributes["vars"]
-    else:
-        env = {}
-
+    env = env_deco[0].attributes["vars"] if env_deco else {}
     # Add the environment variables related to the input-paths argument
     if split_vars:
         env.update(split_vars)

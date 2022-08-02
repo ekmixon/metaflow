@@ -79,9 +79,15 @@ class FileCache(object):
         ds_root = ds_cls.path_join(*ds_cls.path_split(location)[:-5])
         cache_id = self._flow_ds_type(ds_type, ds_root, flow_name)
 
-        token = '%s.cached' % sha1(os.path.join(
-            run_id, step_name, task_id, '%s_log' % logtype).\
-            encode('utf-8')).hexdigest()
+        token = (
+            '%s.cached'
+            % sha1(
+                os.path.join(run_id, step_name, task_id, f'{logtype}_log').encode(
+                    'utf-8'
+                )
+            ).hexdigest()
+        )
+
         path = os.path.join(self._cache_dir, cache_id, token[:2], token)
 
         cached_log = self.read_file(path)
@@ -195,8 +201,7 @@ class FileCache(object):
         try:
             FileCache._makedirs(dirname)
         except:  # noqa E722
-            raise FileCacheException(
-                'Could not create directory: %s' % dirname)
+            raise FileCacheException(f'Could not create directory: {dirname}')
         tmpfile = NamedTemporaryFile(
             dir=dirname, prefix='dlobj', delete=False)
         # Now write out the file
@@ -256,9 +261,11 @@ class FileCache(object):
 
     def _garbage_collect(self):
         now = time.time()
-        while self._objects and self._total > self._max_size * 1024**2:
-            if now - self._objects[0][0] < NEW_FILE_QUARANTINE:
-                break
+        while (
+            self._objects
+            and self._total > self._max_size * 1024**2
+            and not now - self._objects[0][0] < NEW_FILE_QUARANTINE
+        ):
             ctime, size, path = self._objects.pop(0)
             self._total -= size
             try:
@@ -283,7 +290,7 @@ class FileCache(object):
     def _get_datastore_storage_impl(ds_type):
         storage_impl = DATASTORES.get(ds_type, None)
         if storage_impl is None:
-            raise FileCacheException('Datastore %s was not found' % ds_type)
+            raise FileCacheException(f'Datastore {ds_type} was not found')
         return storage_impl
 
     def _get_flow_datastore(self, ds_type, ds_root, flow_name):
@@ -292,7 +299,6 @@ class FileCache(object):
 
         if cached_flow_datastore:
             od_move_to_end(self._store_caches, cache_id)
-            return cached_flow_datastore
         else:
             storage_impl = self._get_datastore_storage_impl(ds_type)
             cached_flow_datastore = FlowDataStore(
@@ -307,7 +313,8 @@ class FileCache(object):
             if len(self._store_caches) > CLIENT_CACHE_MAX_FLOWDATASTORE_COUNT:
                 cache_id_to_remove, _ = self._store_caches.popitem(last=False)
                 del self._blob_caches[cache_id_to_remove]
-            return cached_flow_datastore
+
+        return cached_flow_datastore
 
     def _get_task_datastore(
             self, ds_type, ds_root, flow_name, run_id, step_name, task_id, attempt):
@@ -316,8 +323,7 @@ class FileCache(object):
         if attempt is not None:
             cache_id = self._task_ds_id(
                 ds_type, ds_root, flow_name, run_id, step_name, task_id, attempt)
-            cached_metadata = self._task_metadata_caches.get(cache_id)
-            if cached_metadata:
+            if cached_metadata := self._task_metadata_caches.get(cache_id):
                 od_move_to_end(self._task_metadata_caches, cache_id)
                 return flow_ds.get_task_datastore(
                     run_id, step_name, task_id, attempt=attempt,
@@ -342,7 +348,8 @@ class FileBlobCache(BlobCache):
     def _path(self, key):
         key_dir = key[:2]
         return os.path.join(
-            self._filecache.cache_dir, self._cache_id, key_dir, '%s.blob' % key)
+            self._filecache.cache_dir, self._cache_id, key_dir, f'{key}.blob'
+        )
 
     def load_key(self, key):
         return self._filecache.read_file(self._path(key))

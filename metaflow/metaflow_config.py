@@ -19,16 +19,15 @@ def init_config():
     profile = os.environ.get('METAFLOW_PROFILE')
     path_to_config = os.path.join(home, 'config.json')
     if profile:
-        path_to_config = os.path.join(home, 'config_%s.json' % profile)
+        path_to_config = os.path.join(home, f'config_{profile}.json')
     path_to_config = os.path.expanduser(path_to_config)
-    config = {}
     if os.path.exists(path_to_config):
         with open(path_to_config) as f:
             return json.load(f)
     elif profile:
         raise MetaflowException('Unable to locate METAFLOW_PROFILE \'%s\' in \'%s\')' %
                                 (profile, home))
-    return config
+    return {}
 
 
 # Initialize defaults required to setup environment variables.
@@ -62,14 +61,20 @@ DATASTORE_SYSROOT_S3 = from_conf('METAFLOW_DATASTORE_SYSROOT_S3')
 # S3 datatools root location
 DATATOOLS_SUFFIX = from_conf('METAFLOW_DATATOOLS_SUFFIX', 'data')
 DATATOOLS_S3ROOT = from_conf(
-    'METAFLOW_DATATOOLS_S3ROOT', 
-        '%s/%s' % (from_conf('METAFLOW_DATASTORE_SYSROOT_S3'), DATATOOLS_SUFFIX)
-            if from_conf('METAFLOW_DATASTORE_SYSROOT_S3') else None)
+    'METAFLOW_DATATOOLS_S3ROOT',
+    f"{from_conf('METAFLOW_DATASTORE_SYSROOT_S3')}/{DATATOOLS_SUFFIX}"
+    if from_conf('METAFLOW_DATASTORE_SYSROOT_S3')
+    else None,
+)
+
 # Local datatools root location
 DATATOOLS_LOCALROOT = from_conf(
     'METAFLOW_DATATOOLS_LOCALROOT',
-        '%s/%s' % (from_conf('METAFLOW_DATASTORE_SYSROOT_LOCAL'), DATATOOLS_SUFFIX)
-            if from_conf('METAFLOW_DATASTORE_SYSROOT_LOCAL') else None)
+    f"{from_conf('METAFLOW_DATASTORE_SYSROOT_LOCAL')}/{DATATOOLS_SUFFIX}"
+    if from_conf('METAFLOW_DATASTORE_SYSROOT_LOCAL')
+    else None,
+)
+
 
 # S3 endpoint url 
 S3_ENDPOINT_URL = from_conf('METAFLOW_S3_ENDPOINT_URL', None)
@@ -166,8 +171,10 @@ KUBERNETES_CONTAINER_IMAGE = from_conf("METAFLOW_KUBERNETES_CONTAINER_IMAGE")
 ###
 # Conda package root location on S3
 CONDA_PACKAGE_S3ROOT = from_conf(
-    'METAFLOW_CONDA_PACKAGE_S3ROOT', 
-        '%s/conda' % from_conf('METAFLOW_DATASTORE_SYSROOT_S3'))
+    'METAFLOW_CONDA_PACKAGE_S3ROOT',
+    f"{from_conf('METAFLOW_DATASTORE_SYSROOT_S3')}/conda",
+)
+
 
 ###
 # Debug configuration
@@ -175,7 +182,10 @@ CONDA_PACKAGE_S3ROOT = from_conf(
 DEBUG_OPTIONS = ['subcommand', 'sidecar', 's3client']
 
 for typ in DEBUG_OPTIONS:
-    vars()['METAFLOW_DEBUG_%s' % typ.upper()] = from_conf('METAFLOW_DEBUG_%s' % typ.upper())
+    vars()[f'METAFLOW_DEBUG_{typ.upper()}'] = from_conf(
+        f'METAFLOW_DEBUG_{typ.upper()}'
+    )
+
 
 ###
 # AWS Sandbox configuration
@@ -218,10 +228,7 @@ MAX_ATTEMPTS = 6
 # to silence it:
 class Filter(logging.Filter):
     def filter(self, record):
-        if record.pathname.endswith('driver.py') and \
-           'grammar' in record.msg:
-            return False
-        return True
+        return not record.pathname.endswith('driver.py') or 'grammar' not in record.msg
 
 
 logger = logging.getLogger()
@@ -256,16 +263,14 @@ try:
     import metaflow_extensions.config.metaflow_config as extension_module
 except ImportError as e:
     ver = sys.version_info[0] * 10 + sys.version_info[1]
-    if ver >= 36:
-        # e.name is set to the name of the package that fails to load
-        # so don't error ONLY IF the error is importing this module (but do
-        # error if there is a transitive import error)
-        if not (isinstance(e, ModuleNotFoundError) and \
-            e.name in ['metaflow_extensions', 'metaflow_extensions.config']):
-            print(
-                "Cannot load metaflow_extensions configuration -- "
-                "if you want to ignore, uninstall metaflow_extensions package")
-            raise
+    if ver >= 36 and not (
+        isinstance(e, ModuleNotFoundError)
+        and e.name in ['metaflow_extensions', 'metaflow_extensions.config']
+    ):
+        print(
+            "Cannot load metaflow_extensions configuration -- "
+            "if you want to ignore, uninstall metaflow_extensions package")
+        raise
 else:
     # We load into globals whatever we have in extension_module
     # We specifically exclude any modules that may be included (like sys, os, etc)
@@ -273,8 +278,10 @@ else:
         if n == 'DEBUG_OPTIONS':
             DEBUG_OPTIONS.extend(o)
             for typ in o:
-                vars()['METAFLOW_DEBUG_%s' % typ.upper()] = \
-                    from_conf('METAFLOW_DEBUG_%s' % typ.upper())
+                vars()[f'METAFLOW_DEBUG_{typ.upper()}'] = from_conf(
+                    f'METAFLOW_DEBUG_{typ.upper()}'
+                )
+
         elif not n.startswith('__') and not isinstance(o, types.ModuleType):
             globals()[n] = o
 finally:

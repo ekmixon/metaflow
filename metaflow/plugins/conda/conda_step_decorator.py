@@ -105,9 +105,7 @@ class CondaStepDecorator(StepDecorator):
 
     def _env_id(self):
         deps = self._step_deps()
-        return 'metaflow_%s_%s_%s' % (self.flow.name, 
-                                        self.architecture, 
-                                        sha1(b' '.join(sorted(deps))).hexdigest())
+        return f"metaflow_{self.flow.name}_{self.architecture}_{sha1(b' '.join(sorted(deps))).hexdigest()}"
 
     def _resolve_step_environment(self, ds_root, force=False):
         env_id = self._env_id()
@@ -163,7 +161,7 @@ class CondaStepDecorator(StepDecorator):
                 # when the underlying OS is spoofed.
                 tarball_path = tarball_path[:-6]
             if not tarball_path.endswith('.tar.bz2'):
-                tarball_path = '%s.tar.bz2' % tarball_path
+                tarball_path = f'{tarball_path}.tar.bz2'
             if not os.path.isfile(tarball_path):
                 # The tarball maybe missing when user invokes `conda clean`!
                 to_download.append((package_info['url'], tarball_path))
@@ -189,26 +187,21 @@ class CondaStepDecorator(StepDecorator):
         return env_id
 
     def _disable_safety_checks(self, decos):
-        # Disable conda safety checks when creating linux-64 environments on
-        # a macOS. This is needed because of gotchas around inconsistently 
-        # case-(in)sensitive filesystems for macOS and linux.
-        for deco in decos:
-            if deco.name in ('batch', 'kubernetes') and platform.system() == 'Darwin':
-                return True
-        return False
+        return any(
+            deco.name in ('batch', 'kubernetes') and platform.system() == 'Darwin'
+            for deco in decos
+        )
 
     def _architecture(self, decos):
         for deco in decos:
             if deco.name in ('batch', 'kubernetes'):
                 # force conda resolution for linux-64 architectures
                 return 'linux-64'
-        bit = '32'
-        if platform.machine().endswith('64'):
-            bit = '64'
+        bit = '64' if platform.machine().endswith('64') else '32'
         if platform.system() == 'Linux':
-            return 'linux-%s' % bit
+            return f'linux-{bit}'
         elif platform.system() == 'Darwin':
-            return 'osx-%s' % bit
+            return f'osx-{bit}'
         else:
             raise InvalidEnvironmentException('The *@conda* decorator is not supported '
                                               'outside of Linux and Darwin platforms')

@@ -29,7 +29,7 @@ class TaskDataStoreSet(object):
                 prefetch.update(ds.keys_for_artifacts(prefetch_data_artifacts))
             # ignore missing keys
             prefetch.discard(None)
-            
+
             # prefetch artifacts and share them with all datastores
             # in this DatastoreSet
             preloaded = dict(flow_datastore.ca_store.load_blobs(prefetch))
@@ -49,8 +49,7 @@ class TaskDataStoreSet(object):
         return self.pathspec_index_cache.get(pathspec_index, None)
 
     def __iter__(self):
-        for v in self.pathspec_cache.values():
-            yield v
+        yield from self.pathspec_cache.values()
 
 """
 This class ensures that blobs that correspond to artifacts that

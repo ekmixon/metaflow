@@ -74,7 +74,12 @@ class DynamoDbClient(object):
         )
 
         if r.status_code != 200:
-            raise RuntimeError("Failed to query instance metadata. Url [%s]" % metadata_url +
-                        " Error code [%s]" % str(r.status_code))
+            raise RuntimeError(
+                (
+                    f"Failed to query instance metadata. Url [{metadata_url}]"
+                    + f" Error code [{str(r.status_code)}]"
+                )
+            )
+
 
         return r.text[:-1]

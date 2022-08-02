@@ -142,12 +142,12 @@ class Local(object):
 
     def get(self, key=None, return_missing=False):
         p = self._path(key)
-        url = u'local://%s' % p
+        url = f'local://{p}'
         if not os.path.isfile(p):
             if return_missing:
                 p = None
             else:
-                raise MetaflowLocalNotFound("Local URL %s not found" % url)
+                raise MetaflowLocalNotFound(f"Local URL {url} not found")
         return LocalObject(url, p)
 
     def put(self, key, obj, overwrite=True):
@@ -156,7 +156,7 @@ class Local(object):
             Local._makedirs(os.path.dirname(p))
             with open(p, 'wb') as f:
                 f.write(obj)
-        return u'local://%s' % p
+        return f'local://{p}'
 
 
 # From here on out, this is the IncludeFile implementation.
@@ -181,7 +181,7 @@ class LocalFile():
                     decoded_value['url']), None
             path = decoded_value['url']
         for prefix, handler in DATACLIENTS.items():
-            if path.startswith(u"%s://" % prefix):
+            if path.startswith(f"{prefix}://"):
                 return True, Uploader(handler), None
         try:
             with open(path, mode='r') as _:
@@ -203,12 +203,12 @@ class LocalFile():
         ok, _, err = LocalFile.is_file_handled(self._path)
         if not ok:
             raise MetaflowException(err)
-        client = DATACLIENTS.get(ctx.ds_type)
-        if client:
+        if client := DATACLIENTS.get(ctx.ds_type):
             return Uploader(client).store(
                 ctx.flow_name, self._path, self._is_text, self._encoding, ctx.logger)
         raise MetaflowException(
-            "IncludeFile: no client found for datastore type %s" % ctx.ds_type)
+            f"IncludeFile: no client found for datastore type {ctx.ds_type}"
+        )
 
 
 class FilePathClass(click.ParamType):
@@ -318,8 +318,7 @@ class Uploader():
         # Avoid encoding twice (default -> URL -> _convert method of FilePath for example)
         if url is None or len(url) == 0 or url[0] == '{':
             return url
-        return_value = {'type': url_type, 'url': url}
-        return_value.update(kwargs)
+        return_value = {'type': url_type, 'url': url} | kwargs
         return json.dumps(return_value)
 
     @staticmethod
@@ -335,10 +334,7 @@ class Uploader():
         while pos < len(unit) and sz >= 1024:
             sz = sz // 1024
             pos += 1
-        if pos >= 3:
-            extra = '(this may take a while)'
-        else:
-            extra = ''
+        extra = '(this may take a while)' if pos >= 3 else ''
         echo(
             'Including file %s of size %d%s %s' % (path, sz, unit[pos], extra))
         try:
@@ -359,7 +355,7 @@ class Uploader():
         buf.seek(0)
         with self._client_class() as client:
             url = client.put(path, buf.getvalue(), overwrite=False)
-            echo('File persisted at %s' % url)
+            echo(f'File persisted at {url}')
             return Uploader.encode_url(Uploader.file_type, url, is_text=is_text, encoding=encoding)
 
     def load(self, value):
@@ -367,16 +363,21 @@ class Uploader():
         with self._client_class() as client:
             obj = client.get(value_info['url'], return_missing=True)
             if obj.exists:
-                if value_info['type'] == Uploader.file_type:
-                    # We saved this file directly so we know how to read it out
-                    with gzip.GzipFile(filename=obj.path, mode='rb') as f:
-                        if value_info['is_text']:
-                            return io.TextIOWrapper(f, encoding=value_info.get('encoding')).read()
-                        return f.read()
-                else:
+                if value_info['type'] != Uploader.file_type:
                     # We open this file according to the is_text and encoding information
+                    return (
+                        io.open(
+                            obj.path,
+                            mode='rt',
+                            encoding=value_info.get('encoding'),
+                        ).read()
+                        if value_info['is_text']
+                        else io.open(obj.path, mode='rb').read()
+                    )
+
+                # We saved this file directly so we know how to read it out
+                with gzip.GzipFile(filename=obj.path, mode='rb') as f:
                     if value_info['is_text']:
-                        return io.open(obj.path, mode='rt', encoding=value_info.get('encoding')).read()
-                    else:
-                        return io.open(obj.path, mode='rb').read()
-            raise FileNotFoundError("File at %s does not exist" % value_info['url'])
+                        return io.TextIOWrapper(f, encoding=value_info.get('encoding')).read()
+                    return f.read()
+            raise FileNotFoundError(f"File at {value_info['url']} does not exist")

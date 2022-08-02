@@ -12,12 +12,8 @@ class MetaflowExceptionWrapper(Exception):
     def __init__(self, exc=None):
         if exc is not None:
             self.exception = str(exc)
-            self.type = '%s.%s' % (exc.__class__.__module__,
-                                   exc.__class__.__name__)
-            if sys.exc_info()[0] is None:
-                self.stacktrace = None
-            else:
-                self.stacktrace = traceback.format_exc()
+            self.type = f'{exc.__class__.__module__}.{exc.__class__.__name__}'
+            self.stacktrace = None if sys.exc_info()[0] is None else traceback.format_exc()
 
     # Base Exception defines its own __reduce__ and __setstate__
     # which don't work nicely with derived exceptions. We override
@@ -35,10 +31,10 @@ class MetaflowExceptionWrapper(Exception):
         return str(self)
 
     def __str__(self):
-        if self.stacktrace:
-            return self.stacktrace
-        else:
-            return '[no stacktrace]\n%s: %s' % (self.type, self.exception)
+        return self.stacktrace or '[no stacktrace]\n%s: %s' % (
+            self.type,
+            self.exception,
+        )
 
 class MetaflowException(Exception):
     headline = 'Flow failed'
@@ -49,7 +45,7 @@ class MetaflowException(Exception):
 
     def __str__(self):
         prefix = 'line %d: ' % self.line_no if self.line_no else ''
-        return '%s%s' % (prefix, self.message)
+        return f'{prefix}{self.message}'
 
 class ParameterFieldFailed(MetaflowException):
     headline = "Parameter field failed"
@@ -128,16 +124,14 @@ try:
     import metaflow_extensions.exceptions as extension_module
 except ImportError as e:
     ver = sys.version_info[0] * 10 + sys.version_info[1]
-    if ver >= 36:
-        # e.name is set to the name of the package that fails to load
-        # so don't error ONLY IF the error is importing this module (but do
-        # error if there is a transitive import error)
-        if not (isinstance(e, ModuleNotFoundError) and \
-                e.name in ['metaflow_extensions', 'metaflow_extensions.exceptions']):
-            print(
-                "Cannot load metaflow_extensions exceptions -- "
-                "if you want to ignore, uninstall metaflow_extensions package")
-            raise
+    if ver >= 36 and not (
+        isinstance(e, ModuleNotFoundError)
+        and e.name in ['metaflow_extensions', 'metaflow_extensions.exceptions']
+    ):
+        print(
+            "Cannot load metaflow_extensions exceptions -- "
+            "if you want to ignore, uninstall metaflow_extensions package")
+        raise
 else:
     # We load into globals whatever we have in extension_module
     # We specifically exclude any modules that may be included (like sys, os, etc)

@@ -83,28 +83,20 @@ class KubernetesDecorator(StepDecorator):
             attributes, statically_defined
         )
 
-        # TODO: Unify the logic with AWS Batch
-        # If no docker image is explicitly specified, impute a default image.
         if not self.attributes["image"]:
-            # If metaflow-config specifies a docker image, just use that.
-            if BATCH_CONTAINER_IMAGE:
-                self.attributes["image"] = BATCH_CONTAINER_IMAGE
-            # If metaflow-config doesn't specify a docker image, assign a
-            # default docker image.
-            else:
-                # Default to vanilla Python image corresponding to major.minor
-                # version of the Python interpreter launching the flow.
-                self.attributes["image"] = "python:%s.%s" % (
-                    platform.python_version_tuple()[0],
-                    platform.python_version_tuple()[1],
-                )
+            self.attributes["image"] = (
+                BATCH_CONTAINER_IMAGE
+                or f"python:{platform.python_version_tuple()[0]}.{platform.python_version_tuple()[1]}"
+            )
+
         # Assign docker registry URL for the image.
-        if not get_docker_registry(self.attributes["image"]):
-            if BATCH_CONTAINER_REGISTRY:
-                self.attributes["image"] = "%s/%s" % (
-                    BATCH_CONTAINER_REGISTRY.rstrip("/"),
-                    self.attributes["image"],
-                )
+        if (
+            not get_docker_registry(self.attributes["image"])
+            and BATCH_CONTAINER_REGISTRY
+        ):
+            self.attributes[
+                "image"
+            ] = f'{BATCH_CONTAINER_REGISTRY.rstrip("/")}/{self.attributes["image"]}'
 
     # Refer https://github.com/Netflix/metaflow/blob/master/docs/lifecycle.png
     # to understand where these functions are invoked in the lifecycle of a
@@ -132,7 +124,7 @@ class KubernetesDecorator(StepDecorator):
                     # We use the larger of @resources and @k8s attributes
                     # TODO: Fix https://github.com/Netflix/metaflow/issues/467
                     my_val = self.attributes.get(k)
-                    if not (my_val is None and v is None):
+                    if my_val is not None or v is not None:
                         self.attributes[k] = str(
                             max(int(my_val or 0), int(v or 0))
                         )
@@ -176,7 +168,7 @@ class KubernetesDecorator(StepDecorator):
             cli_args.commands = ["kubernetes", "step"]
             cli_args.command_args.append(self.package_sha)
             cli_args.command_args.append(self.package_url)
-            
+
             # --namespace is used to specify Metaflow namespace (different
             # concept from k8s namespace).
             for k,v in self.attributes.items():
@@ -209,15 +201,14 @@ class KubernetesDecorator(StepDecorator):
         # variable.
 
         if "METAFLOW_KUBERNETES_WORKLOAD" in os.environ:
-            meta = {}
-            # TODO: Get kubernetes job id and job name
-            meta["kubernetes-pod-id"] = os.environ["METAFLOW_KUBERNETES_POD_ID"]
-            meta["kubernetes-pod-name"] = os.environ[
-                "METAFLOW_KUBERNETES_POD_NAME"
-            ]
-            meta["kubernetes-pod-namespace"] = os.environ[
-                "METAFLOW_KUBERNETES_POD_NAMESPACE"
-            ]
+            meta = {
+                "kubernetes-pod-id": os.environ["METAFLOW_KUBERNETES_POD_ID"],
+                "kubernetes-pod-name": os.environ["METAFLOW_KUBERNETES_POD_NAME"],
+                "kubernetes-pod-namespace": os.environ[
+                    "METAFLOW_KUBERNETES_POD_NAMESPACE"
+                ],
+            }
+
             # meta['kubernetes-job-attempt'] = ?
 
             entries = [
@@ -240,16 +231,14 @@ class KubernetesDecorator(StepDecorator):
                        max_user_code_retries):
         # task_post_step may run locally if fallback is activated for @catch 
         # decorator.
-        if 'METAFLOW_KUBERNETES_WORKLOAD' in os.environ:
-            # If `local` metadata is configured, we would need to copy task
-            # execution metadata from the AWS Batch container to user's
-            # local file system after the user code has finished execution.
-            # This happens via datastore as a communication bridge.
-            if self.metadata.TYPE == 'local':
-                # Note that the datastore is *always* Amazon S3 (see 
-                # runtime_task_created function).
-                sync_local_metadata_to_datastore(DATASTORE_LOCAL_DIR, 
-                    self.task_datastore) 
+        if (
+            'METAFLOW_KUBERNETES_WORKLOAD' in os.environ
+            and self.metadata.TYPE == 'local'
+        ):
+            # Note that the datastore is *always* Amazon S3 (see 
+            # runtime_task_created function).
+            sync_local_metadata_to_datastore(DATASTORE_LOCAL_DIR, 
+                self.task_datastore) 
 
     def task_exception(self,
                        exception,
@@ -260,16 +249,14 @@ class KubernetesDecorator(StepDecorator):
                        max_user_code_retries):
         # task_exception may run locally if fallback is activated for @catch 
         # decorator.
-        if 'METAFLOW_KUBERNETES_WORKLOAD' in os.environ:
-            # If `local` metadata is configured, we would need to copy task
-            # execution metadata from the AWS Batch container to user's
-            # local file system after the user code has finished execution.
-            # This happens via datastore as a communication bridge.
-            if self.metadata.TYPE == 'local':
-                # Note that the datastore is *always* Amazon S3 (see 
-                # runtime_task_created function).
-                sync_local_metadata_to_datastore(DATASTORE_LOCAL_DIR, 
-                    self.task_datastore)        
+        if (
+            'METAFLOW_KUBERNETES_WORKLOAD' in os.environ
+            and self.metadata.TYPE == 'local'
+        ):
+            # Note that the datastore is *always* Amazon S3 (see 
+            # runtime_task_created function).
+            sync_local_metadata_to_datastore(DATASTORE_LOCAL_DIR, 
+                self.task_datastore)        
 
     def task_finished(self,
                       step_name,

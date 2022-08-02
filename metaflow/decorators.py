@@ -101,17 +101,15 @@ class Decorator(object):
         top = deco_spec.split(':', 1)
         if len(top) == 1:
             return cls()
-        else:
-            name, attrspec = top
-            attrs = dict(map(lambda x: x.strip(), a.split('=')) 
-                for a in re.split(''',(?=[\s\w]+=)''', attrspec.strip('"\'')))
-            return cls(attributes=attrs)
+        name, attrspec = top
+        attrs = dict(map(lambda x: x.strip(), a.split('=')) 
+            for a in re.split(''',(?=[\s\w]+=)''', attrspec.strip('"\'')))
+        return cls(attributes=attrs)
 
     def make_decorator_spec(self):
-        attrs = {k: v for k, v in self.attributes.items() if v is not None}
-        if attrs:
+        if attrs := {k: v for k, v in self.attributes.items() if v is not None}:
             attrstr = ','.join('%s=%s' % x for x in attrs.items())
-            return '%s:%s' % (self.name, attrstr)
+            return f'{self.name}:{attrstr}'
         else:
             return self.name
 
@@ -119,9 +117,8 @@ class Decorator(object):
         mode = 'decorated' if self.statically_defined else 'cli'
         attrs = ' '.join('%s=%s' % x for x in self.attributes.items())
         if attrs:
-            attrs = ' ' + attrs
-        fmt = '%s<%s%s>' % (self.name, mode, attrs)
-        return fmt
+            attrs = f' {attrs}'
+        return f'{self.name}<{mode}{attrs}>'
 
 
 class FlowDecorator(Decorator):
@@ -174,7 +171,7 @@ def add_decorator_options(cmd):
                 raise MetaflowInternalError(msg)
             else:
                 seen[option] = deco.name
-                cmd.params.insert(0, click.Option(('--' + option,), **kwargs))
+                cmd.params.insert(0, click.Option((f'--{option}', ), **kwargs))
     return cmd
 
 

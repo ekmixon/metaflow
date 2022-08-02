@@ -43,8 +43,7 @@ class FlowDataStore(object):
             The optional root for this datastore; if not provided, use the
             default for the DataStoreStorage, optional
         """
-        storage_impl = storage_impl if storage_impl else \
-            self.default_storage_impl
+        storage_impl = storage_impl or self.default_storage_impl
         if storage_impl is None:
             raise RuntimeError("No datastore storage implementation specified")
         self._storage_impl = storage_impl(ds_root)
@@ -114,15 +113,18 @@ class FlowDataStore(object):
             task_urls = [task.path for task in self._storage_impl.list_content(
                 step_urls) if task.is_file is False]
         urls = []
-        for task_url in task_urls:
-            for attempt in range(metaflow_config.MAX_ATTEMPTS):
-                for suffix in [TaskDataStore.METADATA_DATA_SUFFIX,
-                               TaskDataStore.METADATA_ATTEMPT_SUFFIX,
-                               TaskDataStore.METADATA_DONE_SUFFIX]:
-                    urls.append(self._storage_impl.path_join(
-                        task_url,
-                        TaskDataStore.metadata_name_for_attempt(suffix, attempt)
-                    ))
+        for task_url, attempt in itertools.product(task_urls, range(metaflow_config.MAX_ATTEMPTS)):
+            urls.extend(
+                self._storage_impl.path_join(
+                    task_url,
+                    TaskDataStore.metadata_name_for_attempt(suffix, attempt),
+                )
+                for suffix in [
+                    TaskDataStore.METADATA_DATA_SUFFIX,
+                    TaskDataStore.METADATA_ATTEMPT_SUFFIX,
+                    TaskDataStore.METADATA_DONE_SUFFIX,
+                ]
+            )
 
         latest_started_attempts = {}
         done_attempts = set()
@@ -137,7 +139,7 @@ class FlowDataStore(object):
                         done_attempts.add((run, step, task, attempt))
                     elif fname == TaskDataStore.METADATA_ATTEMPT_SUFFIX:
                         latest_started_attempts[(run, step, task)] = \
-                            max(latest_started_attempts.get((run, step, task), 0),
+                                max(latest_started_attempts.get((run, step, task), 0),
                                 attempt)
                     elif fname == TaskDataStore.METADATA_DATA_SUFFIX:
                         # This somewhat breaks the abstraction since we are using
@@ -147,9 +149,11 @@ class FlowDataStore(object):
         # We now figure out the latest attempt that started *and* finished.
         # Note that if an attempt started but didn't finish, we do *NOT* return
         # the previous attempt
-        latest_started_attempts = set(
+        latest_started_attempts = {
             (run, step, task, attempt)
-            for (run, step, task), attempt in latest_started_attempts.items())
+            for (run, step, task), attempt in latest_started_attempts.items()
+        }
+
         if allow_not_done:
             latest_to_fetch = latest_started_attempts
         else:
@@ -211,5 +215,4 @@ class FlowDataStore(object):
         Iterator[bytes]
             Iterator over (key, blob) tuples
         """
-        for key, blob in self.ca_store.load_blobs(keys, force_raw=force_raw):
-            yield key, blob
+        yield from self.ca_store.load_blobs(keys, force_raw=force_raw)

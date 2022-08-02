@@ -67,9 +67,7 @@ class TaskDataStore(object):
 
     @staticmethod
     def metadata_name_for_attempt(name, attempt):
-        if attempt is None:
-            return name
-        return '%d.%s' % (attempt, name)
+        return name if attempt is None else '%d.%s' % (attempt, name)
 
     @staticmethod
     def parse_attempt_metadata(name):
@@ -147,8 +145,7 @@ class TaskDataStore(object):
                     data_obj = self.load_metadata([self.METADATA_DATA_SUFFIX])
                     data_obj = data_obj[self.METADATA_DATA_SUFFIX]
                 elif self._attempt is None or not allow_not_done:
-                    raise DataException(
-                        "Data was not found or not finished at %s" % self._path)
+                    raise DataException(f"Data was not found or not finished at {self._path}")
 
                 if data_obj is not None:
                     self._objects = data_obj.get('objects', {})
@@ -186,7 +183,7 @@ class TaskDataStore(object):
     @property
     def pathspec_index(self):
         idxstr = ','.join(map(str, (f.index for f in self['_foreach_stack'])))
-        return '%s/%s[%s]' % (self._run_id, self._step_name, idxstr)
+        return f'{self._run_id}/{self._step_name}[{idxstr}]'
 
     @property
     def parent_datastore(self):
@@ -320,21 +317,15 @@ class TaskDataStore(object):
         to_load = []
         sha_to_names = {}
         for name in names:
-            info = self._info.get(name)
-            # We use gzip+pickle-v2 as this is the oldest/most compatible.
-            # This datastore will always include the proper encoding version so
-            # this is just to be able to read very old artifacts
-            if info:
+            if info := self._info.get(name):
                 encode_type = info.get('encoding', 'gzip+pickle-v2')
             else:
                 encode_type = 'gzip+pickle-v2'
             if encode_type not in self._encodings:
-                raise DataException(
-                    "Python 3.4 or later is required to load %s" % name)
-            else:
-                sha = self._objects[name]
-                sha_to_names[sha] = name
-                to_load.append(sha)
+                raise DataException(f"Python 3.4 or later is required to load {name}")
+            sha = self._objects[name]
+            sha_to_names[sha] = name
+            to_load.append(sha)
         # At this point, we load what we don't have from the CAS
         # We assume that if we have one "old" style artifact, all of them are
         # like that which is an easy assumption to make since artifacts are all
@@ -366,7 +357,7 @@ class TaskDataStore(object):
 
     @require_mode('r')
     def get_legacy_log_size(self, stream):
-        name = self._metadata_name_for_attempt('%s.log' % stream)
+        name = self._metadata_name_for_attempt(f'{stream}.log')
         path = self._storage_impl.path_join(self._path, name)
 
         return self._storage_impl.size_file(path)
@@ -496,8 +487,7 @@ class TaskDataStore(object):
         """
         if not self._info:
             return True
-        info = self._info.get(name)
-        if info:
+        if info := self._info.get(name):
             obj_type = info.get('type')
             # Conservatively check if the actual object is None,
             # in case the artifact is stored using a different python version.
@@ -574,8 +564,7 @@ class TaskDataStore(object):
         # propagate parameters between datastores without actually loading the
         # parameters as well as for merge_artifacts
         for var in variables:
-            sha = origin._objects.get(var)
-            if sha:
+            if sha := origin._objects.get(var):
                 self._objects[var] = sha
                 self._info[var] = origin._info[var]
 
@@ -607,7 +596,7 @@ class TaskDataStore(object):
                 continue
             # Skip over properties of the class (Parameters)
             if hasattr(flow.__class__, var) and \
-                    isinstance(getattr(flow.__class__, var), property):
+                        isinstance(getattr(flow.__class__, var), property):
                 continue
 
             val = getattr(flow, var)
@@ -664,8 +653,7 @@ class TaskDataStore(object):
         """
         Load old-style, pre-mflog, log file represented as a bytes object.
         """
-        name = self._metadata_name_for_attempt(
-            '%s.log' % stream, attempt_override)
+        name = self._metadata_name_for_attempt(f'{stream}.log', attempt_override)
         r = self._load_file([name], add_attempt=False)[name]
         return r if r is not None else b''
 
@@ -680,9 +668,7 @@ class TaskDataStore(object):
 
     @require_mode(None)
     def items(self):
-        if self._objects:
-            return self._objects.items()
-        return {}
+        return self._objects.items() if self._objects else {}
 
     @require_mode(None)
     def to_dict(self, show_private=False, max_value_size=None, include=None):
@@ -693,7 +679,7 @@ class TaskDataStore(object):
             if k[0] == '_' and not show_private:
                 continue
             if max_value_size is not None and\
-               self._info[k]['size'] > max_value_size:
+                   self._info[k]['size'] > max_value_size:
                 d[k] = ArtifactTooLarge()
             else:
                 d[k] = self[k]
@@ -709,9 +695,7 @@ class TaskDataStore(object):
 
     @require_mode(None)
     def __contains__(self, name):
-        if self._objects:
-            return name in self._objects
-        return False
+        return name in self._objects if self._objects else False
 
     @require_mode(None)
     def __getitem__(self, name):
@@ -720,9 +704,7 @@ class TaskDataStore(object):
 
     @require_mode('r')
     def __iter__(self):
-        if self._objects:
-            return iter(self._objects)
-        return iter([])
+        return iter(self._objects) if self._objects else iter([])
 
     @require_mode('r')
     def __str__(self):
@@ -735,7 +717,7 @@ class TaskDataStore(object):
 
     @staticmethod
     def _get_log_location(logprefix, stream):
-        return '%s_%s.log' % (logprefix, stream)
+        return f'{logprefix}_{stream}.log'
 
     def _save_file(self, contents, allow_overwrite=True, add_attempt=True):
         """
@@ -761,7 +743,7 @@ class TaskDataStore(object):
                 else:
                     path = self._storage_impl.path_join(self._path, name)
                 if isinstance(value, (RawIOBase, BufferedIOBase)) and \
-                        value.readable():
+                            value.readable():
                     yield path, value
                 elif is_stringish(value):
                     yield path, to_fileobj(value)

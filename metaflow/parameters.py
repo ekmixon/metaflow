@@ -42,7 +42,7 @@ class JSONTypeClass(click.ParamType):
         try:
             return json.loads(value)
         except:
-            self.fail("%s is not a valid JSON object" % value, param, ctx)
+            self.fail(f"{value} is not a valid JSON object", param, ctx)
 
     def __str__(self):
         return repr(self)
@@ -105,12 +105,12 @@ class DeployTimeField(object):
                  list: 'list'}
 
         msg = "The value returned by the deploy-time function for "\
-              "the parameter *%s* field *%s* has a wrong type. " %\
-              (self.parameter_name, self.field)
+                  "the parameter *%s* field *%s* has a wrong type. " %\
+                  (self.parameter_name, self.field)
 
         if self.parameter_type in TYPES:
             if type(val) != self.parameter_type:
-                msg += 'Expected a %s.' % TYPES[self.parameter_type]
+                msg += f'Expected a {TYPES[self.parameter_type]}.'
                 raise ParameterFieldTypeMismatch(msg)
             return str(val) if self.return_str else val
         else:
@@ -124,14 +124,10 @@ class DeployTimeField(object):
         return self.print_representation
 
     def __str__(self):
-        if self.user_print_representation:
-            return self.user_print_representation
-        return self()
+        return self.user_print_representation or self()
 
     def __repr__(self):
-        if self.user_print_representation:
-            return self.user_print_representation
-        return self()
+        return self.user_print_representation or self()
 
 
 def deploy_time_eval(value):
@@ -169,7 +165,7 @@ class Parameter(object):
             if callable(kwargs.get(field)):
                 raise MetaflowException("Parameter *%s*: Field '%s' cannot "
                                         "have a function as its value"\
-                                        % (name, field))
+                                            % (name, field))
 
         self.kwargs['show_default'] = self.kwargs.get('show_default', True)
 
@@ -192,28 +188,23 @@ class Parameter(object):
 
     def option_kwargs(self, deploy_mode):
         kwargs = self.kwargs
-        if isinstance(kwargs.get('default'), DeployTimeField) and not deploy_mode:
-            ret = dict(kwargs)
-            help_msg = kwargs.get('help')
-            help_msg = '' if help_msg is None else help_msg
-            ret['help'] = help_msg + \
-                "[default: deploy-time value of '%s']" % self.name
-            ret['default'] = None
-            ret['required'] = False
-            return ret
-        else:
+        if not isinstance(kwargs.get('default'), DeployTimeField) or deploy_mode:
             return kwargs
+        ret = dict(kwargs)
+        help_msg = kwargs.get('help')
+        help_msg = '' if help_msg is None else help_msg
+        ret['help'] = help_msg + \
+                "[default: deploy-time value of '%s']" % self.name
+        ret['default'] = None
+        ret['required'] = False
+        return ret
 
     def load_parameter(self, v):
         return v
 
     def _get_type(self, kwargs):
-        default_type = str
-
         default = kwargs.get('default')
-        if default is not None and not callable(default):
-            default_type = type(default)
-
+        default_type = str if default is None or callable(default) else type(default)
         return kwargs.get('type', default_type)
 
     @property
@@ -234,8 +225,9 @@ def add_custom_parameters(deploy_mode=False):
         # in the order they are defined in the FlowSpec subclass
         for arg in parameters[::-1]:
             kwargs = arg.option_kwargs(deploy_mode)
-            cmd.params.insert(0, click.Option(('--' + arg.name,), **kwargs))
+            cmd.params.insert(0, click.Option((f'--{arg.name}', ), **kwargs))
         return cmd
+
     return wrapper
 
 def set_parameters(flow, kwargs):

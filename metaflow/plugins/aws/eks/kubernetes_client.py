@@ -30,7 +30,7 @@ def k8s_retry(deadline_seconds=60, max_backoff=32):
 
             deadline = time.time() + deadline_seconds
             retry_number = 0
-            
+
             while True:
                 try:
                     result = function(*args, **kwargs)
@@ -116,10 +116,9 @@ class KubernetesJob(object):
             and float(self._kwargs["cpu"]) > 0
         ):
             raise KubernetesJobException(
-                "Invalid CPU value ({}); it should be greater than 0".format(
-                    self._kwargs["cpu"]
-                )
+                f'Invalid CPU value ({self._kwargs["cpu"]}); it should be greater than 0'
             )
+
 
         # Memory value should be greater than 0
         if not (
@@ -127,10 +126,9 @@ class KubernetesJob(object):
             and int(self._kwargs["memory"]) > 0
         ):
             raise KubernetesJobException(
-                "Invalid memory value ({}); it should be greater than 0".format(
-                    self._kwargs["memory"]
-                )
+                f'Invalid memory value ({self._kwargs["memory"]}); it should be greater than 0'
             )
+
 
         # Disk value should be greater than 0
         if not (
@@ -138,10 +136,9 @@ class KubernetesJob(object):
             and int(self._kwargs["disk"]) > 0
         ):
             raise KubernetesJobException(
-                "Invalid disk value ({}); it should be greater than 0".format(
-                    self._kwargs["disk"]
-                )
+                f'Invalid disk value ({self._kwargs["disk"]}); it should be greater than 0'
             )
+
 
         # TODO(s) (savin)
         # 1. Add support for GPUs.
@@ -171,18 +168,12 @@ class KubernetesJob(object):
                 namespace=self._kwargs["namespace"],  # Defaults to `default`
             ),
             spec=client.V1JobSpec(
-                # Retries are handled by Metaflow when it is responsible for
-                # executing the flow. The responsibility is moved to Kubernetes
-                # when AWS Step Functions / Argo are responsible for the
-                # execution.
                 backoff_limit=self._kwargs.get("retries", 0),
-                completions=1,  # A single non-indexed pod job
-                # TODO (savin): Implement a job clean-up option in the
-                # kubernetes CLI.
+                completions=1,
                 ttl_seconds_after_finished=7
                 * 60
                 * 60  # Remove job after a week. TODO (savin): Make this
-                * 24,  # configurable
+                * 24,
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(
                         annotations=self._kwargs.get("annotations", {}),
@@ -191,15 +182,7 @@ class KubernetesJob(object):
                         namespace=self._kwargs["namespace"],
                     ),
                     spec=client.V1PodSpec(
-                        # Timeout is set on the pod and not the job (important!)
                         active_deadline_seconds=self._kwargs["timeout_in_seconds"],
-                        # TODO (savin): Enable affinities for GPU scheduling.
-                        #               This requires some thought around the
-                        #               UX since specifying affinities can get
-                        #               complicated quickly. We may well decide
-                        #               to move it out of scope for the initial
-                        #               roll out.
-                        # affinity=?,
                         containers=[
                             client.V1Container(
                                 command=self._kwargs["command"],
@@ -232,7 +215,9 @@ class KubernetesJob(object):
                                 ],
                                 env_from=[
                                     client.V1EnvFromSource(
-                                        secret_ref=client.V1SecretEnvSource(name=str(k))
+                                        secret_ref=client.V1SecretEnvSource(
+                                            name=str(k)
+                                        )
                                     )
                                     for k in self._kwargs.get("secrets", [])
                                 ],
@@ -241,9 +226,8 @@ class KubernetesJob(object):
                                 resources=client.V1ResourceRequirements(
                                     requests={
                                         "cpu": str(self._kwargs["cpu"]),
-                                        "memory": "%sM" % str(self._kwargs["memory"]),
-                                        "ephemeral-storage": "%sM"
-                                        % str(self._kwargs["disk"]),
+                                        "memory": f'{str(self._kwargs["memory"])}M',
+                                        "ephemeral-storage": f'{str(self._kwargs["disk"])}M',
                                     }
                                 ),
                             )
@@ -254,38 +238,14 @@ class KubernetesJob(object):
                             str(k.split("=", 1)[0]): str(k.split("=", 1)[1])
                             for k in self._kwargs.get("node_selector", [])
                         },
-                        # TODO (savin): At some point in the very near future,
-                        #               support docker access secrets.
-                        # image_pull_secrets=?,
-                        #
-                        # TODO (savin): We should, someday, get into the pod
-                        #               priority business
-                        # preemption_policy=?,
-                        #
-                        # A Container in a Pod may fail for a number of
-                        # reasons, such as because the process in it exited
-                        # with a non-zero exit code, or the Container was
-                        # killed due to OOM etc. If this happens, fail the pod
-                        # and let Metaflow handle the retries.
                         restart_policy="Never",
                         service_account_name=self._kwargs["service_account"],
-                        # Terminate the container immediately on SIGTERM
                         termination_grace_period_seconds=0,
-                        # TODO (savin): Enable tolerations for GPU scheduling.
-                        #               This requires some thought around the
-                        #               UX since specifying tolerations can get
-                        #               complicated quickly.
-                        # tolerations=?,
-                        #
-                        # TODO (savin): At some point in the very near future,
-                        #               support custom volumes (PVCs/EVCs).
-                        # volumes=?,
-                        #
-                        # TODO (savin): Set termination_message_policy
                     ),
                 ),
             ),
         )
+
         return self
 
     def execute(self):
@@ -427,9 +387,7 @@ class RunningJob(object):
         atexit.register(self.kill)
 
     def __repr__(self):
-        return "{}('{}/{}')".format(
-            self.__class__.__name__, self._namespace, self._name
-        )
+        return f"{self.__class__.__name__}('{self._namespace}/{self._name}')"
 
     @k8s_retry()
     def _fetch_job(self):
@@ -450,16 +408,13 @@ class RunningJob(object):
         """Fetch pod metadata. May return None if pod does not exist."""
         client = self._client_wrapper.get()
 
-        pods = (
-            client.CoreV1Api()
+        if (
+            pods := client.CoreV1Api()
             .list_namespaced_pod(
-                namespace=self._namespace,
-                label_selector="job-name={}".format(self._name),
+                namespace=self._namespace, label_selector=f"job-name={self._name}"
             )
             .to_dict()["items"]
-        )
-
-        if pods:
+        ):
             return pods[0]
         else:
             return None
@@ -565,14 +520,12 @@ class RunningJob(object):
             self._job = self._fetch_job()
         if _job_done():
             return True
-        else:
-            # It is possible for the job metadata to not be updated yet, but the
-            # Pod has already succeeded or failed.
-            self._pod = self._fetch_pod()
-            if self._pod and (self._pod["status"]["phase"] in ("Succeeded", "Failed")):
-                return True
-            else:
-                return False
+        # It is possible for the job metadata to not be updated yet, but the
+        # Pod has already succeeded or failed.
+        self._pod = self._fetch_pod()
+        return bool(
+            self._pod and (self._pod["status"]["phase"] in ("Succeeded", "Failed"))
+        )
 
     def _get_status(self):
         if not self._check_is_done():
@@ -589,26 +542,22 @@ class RunningJob(object):
         if bool(self._job["status"].get("active")):
             msg = "Job:Active"
             if self._pod:
-                msg += " Pod:%s" % self._pod["status"]["phase"].title()
-                # TODO (savin): parse Pod conditions
-                container_status = (
+                msg += f' Pod:{self._pod["status"]["phase"].title()}'
+                if container_status := (
                     self._pod["status"].get("container_statuses") or [None]
-                )[0]
-                if container_status:
+                )[0]:
                     # We have a single container inside the pod
                     status = {"status": "waiting"}
                     for k, v in container_status["state"].items():
                         if v is not None:
                             status["status"] = k
-                            status.update(v)
-                    msg += " Container:%s" % status["status"].title()
-                    reason = ""
-                    if status.get("reason"):
-                        reason = status["reason"]
+                            status |= v
+                    msg += f' Container:{status["status"].title()}'
+                    reason = status["reason"] if status.get("reason") else ""
                     if status.get("message"):
-                        reason += ":%s" % status["message"]
+                        reason += f':{status["message"]}'
                     if reason:
-                        msg += " [%s]" % reason
+                        msg += f" [{reason}]"
             # TODO (savin): This message should be shortened before release.
             return msg
         return "Job:Unknown"
@@ -616,12 +565,11 @@ class RunningJob(object):
     def _check_has_succeeded(self):
         # Job is in a terminal state and the status is marked as succeeded
         if self._check_is_done():
-            if bool(self._job["status"].get("succeeded")) or (
-                self._pod and self._pod["status"]["phase"] == "Succeeded"
-            ):
-                return True
-            else:
-                return False
+            return bool(
+                bool(self._job["status"].get("succeeded"))
+                or (self._pod and self._pod["status"]["phase"] == "Succeeded")
+            )
+
         else:
             return False
 
@@ -630,14 +578,14 @@ class RunningJob(object):
         # or the Job is not allowed to launch any more pods
 
         if self._check_is_done():
-            if (
-                bool(self._job["status"].get("failed"))
-                or (self._job["spec"]["parallelism"] == 0)
-                or (self._pod and self._pod["status"]["phase"] == "Failed")
-            ):
-                return True
-            else:
-                return False
+            return bool(
+                (
+                    bool(self._job["status"].get("failed"))
+                    or (self._job["spec"]["parallelism"] == 0)
+                    or (self._pod and self._pod["status"]["phase"] == "Failed")
+                )
+            )
+
         else:
             return False
 
@@ -656,42 +604,39 @@ class RunningJob(object):
         if self._check_is_done():
             if self._check_has_succeeded():
                 return 0, None
-            # Best effort since Pod object can disappear on us at anytime
-            else:
+            def _done():
+                return self._pod.get("status", {}).get("phase") in (
+                    "Succeeded",
+                    "Failed",
+                )
 
-                def _done():
-                    return self._pod.get("status", {}).get("phase") in (
-                        "Succeeded",
-                        "Failed",
+            if not _done():
+                # If pod status is dirty, check for newer status
+                self._pod = self._fetch_pod()
+            if self._pod:
+                pod_status = self._pod["status"]
+                if pod_status.get("container_statuses") is None:
+                    # We're done, but no container_statuses is set
+                    # This can happen when the pod is evicted
+                    return None, ": ".join(
+                        filter(
+                            None,
+                            [pod_status.get("reason"), pod_status.get("message")],
+                        )
                     )
 
-                if not _done():
-                    # If pod status is dirty, check for newer status
-                    self._pod = self._fetch_pod()
-                if self._pod:
-                    pod_status = self._pod["status"]
-                    if pod_status.get("container_statuses") is None:
-                        # We're done, but no container_statuses is set
-                        # This can happen when the pod is evicted
-                        return None, ": ".join(
+                for k, v in (
+                    pod_status.get("container_statuses", [{}])[0]
+                    .get("state", {})
+                    .items()
+                ):
+                    if v is not None:
+                        return v.get("exit_code"), ": ".join(
                             filter(
                                 None,
-                                [pod_status.get("reason"), pod_status.get("message")],
+                                [v.get("reason"), v.get("message")],
                             )
                         )
-
-                    for k, v in (
-                        pod_status.get("container_statuses", [{}])[0]
-                        .get("state", {})
-                        .items()
-                    ):
-                        if v is not None:
-                            return v.get("exit_code"), ": ".join(
-                                filter(
-                                    None,
-                                    [v.get("reason"), v.get("message")],
-                                )
-                            )
 
         return None, None
 

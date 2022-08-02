@@ -65,12 +65,12 @@ class MovieStatsFlow(FlowSpec):
         # The genre currently being processed is a class property called
         # 'input'.
         self.genre = self.input
-        print("Computing statistics for %s" % self.genre)
+        print(f"Computing statistics for {self.genre}")
 
         # Find all the movies that have this genre and build a dataframe with
         # just those movies and just the columns of interest.
         selector = self.dataframe['genres'].\
-                   apply(lambda row: self.genre in row)
+                       apply(lambda row: self.genre in row)
         self.dataframe = self.dataframe[selector]
         self.dataframe = self.dataframe[['movie_title', 'genres', 'gross']]
 

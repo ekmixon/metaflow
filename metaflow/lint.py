@@ -68,16 +68,16 @@ def check_basic_steps(graph):
 @linter.ensure_static_graph
 @linter.check
 def check_that_end_is_end(graph):
-    msg0="The *end* step should not have a step.next() transition. "\
-         "Just remove it."
-    msg1="The *end* step should not be a join step (it gets an extra "\
-         "argument). Add a join step before it."
-
     node=graph['end']
 
     if node.has_tail_next or node.invalid_tail_next:
+        msg0="The *end* step should not have a step.next() transition. "\
+             "Just remove it."
         raise LintWarn(msg0, node.tail_next_lineno)
     if node.num_args > 1:
+        msg1="The *end* step should not be a join step (it gets an extra "\
+             "argument). Add a join step before it."
+
         raise LintWarn(msg1, node.tail_next_lineno)
 
 @linter.ensure_fundamentals
@@ -140,8 +140,7 @@ def check_unknown_transitions(graph):
     "Step *{0.name}* specifies a self.next() transition to "\
     "an unknown step, *{step}*."
     for node in graph:
-        unknown = [n for n in node.out_funcs if n not in graph]
-        if unknown:
+        if unknown := [n for n in node.out_funcs if n not in graph]:
             raise LintWarn(msg.format(node, step=unknown[0]),
                            node.tail_next_lineno)
 
@@ -168,12 +167,13 @@ def check_for_orphans(graph):
     msg =\
     "Step *{0.name}* is unreachable from the start step. Add "\
     "self.next({0.name}) in another step or remove *{0.name}*."
-    seen = set(['start'])
+    seen = {'start'}
     def traverse(node):
         for n in node.out_funcs:
             if n not in seen:
                 seen.add(n)
                 traverse(graph[n])
+
     traverse(graph['start'])
     nodeset = frozenset(n.name for n in graph)
     orphans = nodeset - seen
@@ -244,8 +244,7 @@ def check_empty_foreaches(graph):
           "at least one step between the split and the join."
     for node in graph:
         if node.type == 'foreach':
-            joins = [n for n in node.out_funcs if graph[n].type == 'join']
-            if joins:
+            if joins := [n for n in node.out_funcs if graph[n].type == 'join']:
                 raise LintWarn(msg.format(node, join=joins[0]))
 
 @linter.ensure_non_nested_foreach
@@ -254,7 +253,8 @@ def check_nested_foreach(graph):
     msg = "Nested foreaches are not allowed: Step *{0.name}* is a foreach "\
           "split that is nested under another foreach split."
     for node in graph:
-        if node.type == 'foreach':
-            if any(graph[p].type == 'foreach' for p in node.split_parents):
-                raise LintWarn(msg.format(node))
+        if node.type == 'foreach' and any(
+            graph[p].type == 'foreach' for p in node.split_parents
+        ):
+            raise LintWarn(msg.format(node))
 

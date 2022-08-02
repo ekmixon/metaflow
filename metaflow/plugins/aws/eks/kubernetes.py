@@ -75,7 +75,7 @@ def generate_rfc1123_name(flow_name,
         sanitized_long_name = long_name.replace('_', '-').lower()
 
     # the name has to be under 63 chars total
-    return sanitized_long_name[:57] + '-' + hash[:5]
+    return f'{sanitized_long_name[:57]}-{hash[:5]}'
 
 
 LABEL_VALUE_REGEX = re.compile(r'^[a-zA-Z0-9]([a-zA-Z0-9\-\_\.]{0,61}[a-zA-Z0-9])?$')
@@ -97,7 +97,7 @@ def sanitize_label_value(val):
     # Replace invalid chars with dots, and if the first char is
     # non-alphahanumeric, replace it with 'u' to make it valid
     sanitized_val = re.sub('^[^A-Z0-9a-z]', 'u', re.sub(r"[^A-Za-z0-9.\-_]", "_", val))
-    return sanitized_val[:57] + '-' + hash[:5]
+    return f'{sanitized_val[:57]}-{hash[:5]}'
 
 
 class Kubernetes(object):
@@ -154,11 +154,8 @@ class Kubernetes(object):
         # The `true` command is to make sure that the generated command
         # plays well with docker containers which have entrypoint set as
         # eval $@
-        cmd_str = "true && mkdir -p /logs && %s && %s && %s; " % (
-            mflog_expr,
-            init_expr,
-            step_expr,
-        )
+        cmd_str = f"true && mkdir -p /logs && {mflog_expr} && {init_expr} && {step_expr}; "
+
         # After the task has finished, we save its exit code (fail/success)
         # and persist the final logs. The whole entrypoint should exit
         # with the exit code (c) of the task.
@@ -167,7 +164,7 @@ class Kubernetes(object):
         # We lose the last logs in this scenario.
         #
         # TODO: Find a way to capture hard exit logs in Kubernetes.
-        cmd_str += "c=$?; %s; exit $c" % BASH_SAVE_LOGS
+        cmd_str += f"c=$?; {BASH_SAVE_LOGS}; exit $c"
         return shlex.split('bash -c "%s"' % cmd_str)
 
     def launch_job(self, **kwargs):
@@ -281,9 +278,10 @@ class Kubernetes(object):
         # Add Metaflow system tags as labels as well!
         for sys_tag in self._metadata.sticky_sys_tags:
             job.label(
-                "metaflow/%s" % sys_tag[: sys_tag.index(":")],
-                sanitize_label_value(sys_tag[sys_tag.index(":") + 1 :])
+                f'metaflow/{sys_tag[: sys_tag.index(":")]}',
+                sanitize_label_value(sys_tag[sys_tag.index(":") + 1 :]),
             )
+
         # TODO: Add annotations based on https://kubernetes.io/blog/2021/04/20/annotating-k8s-for-humans/
 
         return job.create()
@@ -292,21 +290,13 @@ class Kubernetes(object):
 
         def wait_for_launch(job):
             status = job.status
-            echo(
-                "Task is starting (Status %s)..." % status,
-                "stderr",
-                job_id=job.id,
-            )
+            echo(f"Task is starting (Status {status})...", "stderr", job_id=job.id)
             t = time.time()
             while True:
                 new_status = job.status
                 if status != new_status or (time.time() - t) > 30:
                     status = new_status
-                    echo(
-                        "Task is starting (Status %s)..." % status,
-                        "stderr",
-                        job_id=job.id,
-                    )
+                    echo(f"Task is starting (Status {status})...", "stderr", job_id=job.id)
                     t = time.time()
                 if job.is_running or job.is_done:
                     break
@@ -324,10 +314,11 @@ class Kubernetes(object):
                     echo(line.strip().decode("utf-8", errors="replace"), stream)
             except Exception as ex:
                 echo(
-                    "[ temporary error in fetching logs: %s ]" % ex,
+                    f"[ temporary error in fetching logs: {ex} ]",
                     "stderr",
                     job_id=self._job.id,
                 )
+
 
         stdout_tail = S3Tail(stdout_location)
         stderr_tail = S3Tail(stderr_location)
@@ -384,7 +375,7 @@ class Kubernetes(object):
                         "Task failed with a segmentation fault."
                     )
                 else:
-                    msg = "%s (exit code %s)" % (msg, exit_code)
+                    msg = f"{msg} (exit code {exit_code})"
             raise KubernetesException(
                 "%s. This could be a transient error. "
                 "Use @retry to retry." % msg
@@ -392,7 +383,7 @@ class Kubernetes(object):
 
         exit_code, _ = self._job.reason
         echo(
-            "Task finished with exit code %s." % exit_code,
+            f"Task finished with exit code {exit_code}.",
             "stderr",
             job_id=self._job.id,
         )

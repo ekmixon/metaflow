@@ -102,18 +102,18 @@ class StepFunctionsClient(object):
             }
 
     def get_state_machine_arn(self, name):
-        if AWS_SANDBOX_ENABLED:
-            # We can't execute list_state_machines within the sandbox,
-            # but we can construct the statemachine arn since we have
-            # explicit access to the region.
-            from ..aws_client import get_aws_client
-            account_id = get_aws_client('sts').get_caller_identity().get('Account')
-            region = AWS_SANDBOX_REGION
+        if not AWS_SANDBOX_ENABLED:
+            return (
+                state_machine['stateMachineArn']
+                if (state_machine := self.search(name))
+                else None
+            )
+
+        # We can't execute list_state_machines within the sandbox,
+        # but we can construct the statemachine arn since we have
+        # explicit access to the region.
+        from ..aws_client import get_aws_client
+        account_id = get_aws_client('sts').get_caller_identity().get('Account')
+        region = AWS_SANDBOX_REGION
             # Sandboxes are in aws partition
-            return 'arn:aws:states:%s:%s:stateMachine:%s' \
-                                        % (region, account_id, name)
-        else:
-            state_machine = self.search(name)
-            if state_machine:
-                return state_machine['stateMachineArn']
-            return None
+        return f'arn:aws:states:{region}:{account_id}:stateMachine:{name}'

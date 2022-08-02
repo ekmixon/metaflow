@@ -116,29 +116,29 @@ def load_exception(data_transferer, json_obj):
         exception_class = getattr(sys.modules[exception_module], exception_name, None)
     if exception_class is None:
         # Best effort to "recreate" an exception
-        name = "%s.%s" % (exception_module, exception_name)
+        name = f"{exception_module}.{exception_name}"
         exception_class = _remote_exceptions_class.setdefault(
             name,
             type(
                 name,
                 (RemoteInterpreterException,),
-                {"__module__": "%s/%s" % (__name__, exception_module)},
+                {"__module__": f"{__name__}/{exception_module}"},
             ),
         )
+
     exception_class = _wrap_exception(exception_class)
     raised_exception = exception_class.__new__(exception_class)
     raised_exception.args = json_obj.get(FIELD_EXC_ARGS)
     for name, attr in json_obj.get(FIELD_EXC_ATTR):
         try:
             if name in raised_exception.__user_defined__:
-                setattr(raised_exception, "_original_%s" % name, attr)
+                setattr(raised_exception, f"_original_{name}", attr)
             else:
                 setattr(raised_exception, name, attr)
         except AttributeError:
             # In case some things are read only
             pass
-    s = json_obj.get(FIELD_EXC_STR)
-    if s:
+    if s := json_obj.get(FIELD_EXC_STR):
         try:
             if "__str__" in raised_exception.__user_defined__:
                 setattr(raised_exception, "_original___str__", s)
@@ -146,8 +146,7 @@ def load_exception(data_transferer, json_obj):
                 setattr(raised_exception, "__str__", lambda x, s=s: s)
         except AttributeError:
             raised_exception._missing_str = True
-    s = json_obj.get(FIELD_EXC_REPR)
-    if s:
+    if s := json_obj.get(FIELD_EXC_REPR):
         try:
             if "__repr__" in raised_exception.__user_defined__:
                 setattr(raised_exception, "_original___repr__", s)

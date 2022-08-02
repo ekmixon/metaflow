@@ -114,7 +114,7 @@ class NativeRuntime(object):
             logger(
                 'Gathering required information to resume run (this may take a bit of time)...')
             self._origin_ds_set = \
-                TaskDataStoreSet(
+                    TaskDataStoreSet(
                     flow_datastore,
                     clone_run_id,
                     prefetch_data_artifacts=PREFETCH_DATA_ARTIFACTS)
@@ -146,11 +146,7 @@ class NativeRuntime(object):
         if step in self._clone_steps:
             may_clone = False
 
-        if step == '_parameters':
-            decos = []
-        else:
-            decos = getattr(self._flow, step).decorators
-
+        decos = [] if step == '_parameters' else getattr(self._flow, step).decorators
         return Task(self._flow_datastore,
                     self._flow,
                     step,
@@ -181,8 +177,7 @@ class NativeRuntime(object):
 
     def execute(self):
 
-        self._logger('Workflow starting (run-id %s):' % self._run_id,
-                     system_msg=True)
+        self._logger(f'Workflow starting (run-id {self._run_id}):', system_msg=True)
 
         self._metadata.start_run_heartbeat(self._flow.name, self._run_id)
 
@@ -196,7 +191,7 @@ class NativeRuntime(object):
             # main scheduling loop
             exception = None
             while self._run_queue or\
-                    self._num_active_workers > 0:
+                        self._num_active_workers > 0:
 
                 # 1. are any of the current workers finished?
                 finished_tasks = list(self._poll_workers())
@@ -209,13 +204,13 @@ class NativeRuntime(object):
                 if time.time() - progress_tstamp > PROGRESS_INTERVAL:
                     progress_tstamp = time.time()
                     msg = "%d tasks are running: %s." %\
-                          (self._num_active_workers, 'e.g. ...')  # TODO
+                              (self._num_active_workers, 'e.g. ...')  # TODO
                     self._logger(msg, system_msg=True)
                     msg = "%d tasks are waiting in the queue." %\
-                          len(self._run_queue)
+                              len(self._run_queue)
                     self._logger(msg, system_msg=True)
                     msg = "%d steps are pending: %s." %\
-                          (0, 'e.g. ...')  # TODO
+                              (0, 'e.g. ...')  # TODO
                     self._logger(msg, system_msg=True)
 
         except KeyboardInterrupt as ex:
@@ -281,7 +276,7 @@ class NativeRuntime(object):
         # let's assert that the assumption holds
         if len(next_steps) > 1:
             msg = 'Step *{step}* transitions to a join and another '\
-                  'step. The join must be the only transition.'
+                      'step. The join must be the only transition.'
             raise MetaflowInternalError(task, msg.format(step=task.step))
         else:
             next_step = next_steps[0]
@@ -297,16 +292,16 @@ class NativeRuntime(object):
                 mapper_tasks = task.results.get('_control_mapper_tasks')
                 if not mapper_tasks:
                     msg = "Step *{step}* has a control task which didn't "\
-                          "specify the artifact *_control_mapper_tasks* for "\
-                          "the subsequent *{join}* step."
+                              "specify the artifact *_control_mapper_tasks* for "\
+                              "the subsequent *{join}* step."
                     raise MetaflowInternalError(msg.format(step=task.step,
                                                            join=next_steps[0]))
                 elif not (isinstance(mapper_tasks, list) and\
-                          isinstance(mapper_tasks[0], unicode_type)):
+                              isinstance(mapper_tasks[0], unicode_type)):
                     msg = "Step *{step}* has a control task which didn't "\
-                          "specify the artifact *_control_mapper_tasks* as a "\
-                          "list of strings but instead specified it as {typ} "\
-                          "with elements of {elem_typ}."
+                              "specify the artifact *_control_mapper_tasks* as a "\
+                              "list of strings but instead specified it as {typ} "\
+                              "with elements of {elem_typ}."
                     raise MetaflowInternalError(
                             msg.format(step=task.step,
                                        typ=type(mapper_tasks),
@@ -360,7 +355,7 @@ class NativeRuntime(object):
         else:
             # matching_split is the split-parent of the finished task
             matching_split = \
-                        self._graph[self._graph[next_step].split_parents[-1]]
+                            self._graph[self._graph[next_step].split_parents[-1]]
             step_name, foreach_stack = task.finished_id
 
             if matching_split.type == 'foreach':
@@ -431,12 +426,7 @@ class NativeRuntime(object):
             self._finished[task.finished_id] = task.path
             self._is_cloned[task.path] = task.is_cloned
 
-            # CHECK: ensure that runtime transitions match with
-            # statically inferred transitions. Make an exception for control
-            # tasks, where we just rely on static analysis since we don't
-            # execute user code.
-            trans = task.results.get('_transition')
-            if trans:
+            if trans := task.results.get('_transition'):
                 next_steps = trans[0]
                 foreach = trans[1]
             else:
@@ -445,11 +435,11 @@ class NativeRuntime(object):
             expected = self._graph[task.step].out_funcs
             if next_steps != expected:
                 msg = 'Based on static analysis of the code, step *{step}* '\
-                      'was expected to transition to step(s) *{expected}*. '\
-                      'However, when the code was executed, self.next() was '\
-                      'called with *{actual}*. Make sure there is only one '\
-                      'unconditional self.next() call in the end of your '\
-                      'step. '
+                          'was expected to transition to step(s) *{expected}*. '\
+                          'However, when the code was executed, self.next() was '\
+                          'called with *{actual}*. Make sure there is only one '\
+                          'unconditional self.next() call in the end of your '\
+                          'step. '
                 raise MetaflowInternalError(msg.format(step=task.step,
                                                        expected=', '.join(
                                                            expected),
@@ -468,36 +458,35 @@ class NativeRuntime(object):
                     self._queue_push(step, {'input_paths': [task.path]})
 
     def _poll_workers(self):
-        if self._workers:
-            for event in self._poll.poll(PROGRESS_INTERVAL):
-                worker = self._workers.get(event.fd)
-                if worker:
-                    if event.can_read:
-                        worker.read_logline(event.fd)
-                    if event.is_terminated:
-                        returncode = worker.terminate()
+        if not self._workers:
+            return
+        for event in self._poll.poll(PROGRESS_INTERVAL):
+            if worker := self._workers.get(event.fd):
+                if event.can_read:
+                    worker.read_logline(event.fd)
+                if event.is_terminated:
+                    returncode = worker.terminate()
 
-                        for fd in worker.fds():
-                            self._poll.remove(fd)
-                            del self._workers[fd]
-                        self._num_active_workers -= 1
+                    for fd in worker.fds():
+                        self._poll.remove(fd)
+                        del self._workers[fd]
+                    self._num_active_workers -= 1
 
-                        task = worker.task
-                        if returncode:
+                    task = worker.task
+                    if returncode:
                             # worker did not finish successfully
-                            if worker.cleaned or \
-                               returncode == METAFLOW_EXIT_DISALLOW_RETRY:
-                                self._logger("This failed task will not be "
-                                             "retried.", system_msg=True)
-                            else:
-                                if task.retries < task.user_code_retries +\
-                                        task.error_retries:
-                                    self._retry_worker(worker)
-                                else:
-                                    raise TaskFailed(task)
+                        if worker.cleaned or \
+                                   returncode == METAFLOW_EXIT_DISALLOW_RETRY:
+                            self._logger("This failed task will not be "
+                                         "retried.", system_msg=True)
+                        elif task.retries < task.user_code_retries +\
+                                            task.error_retries:
+                            self._retry_worker(worker)
                         else:
-                            # worker finished successfully
-                            yield task
+                            raise TaskFailed(task)
+                    else:
+                        # worker finished successfully
+                        yield task
 
     def _launch_workers(self):
         while self._run_queue and self._num_active_workers < self._max_workers:
@@ -561,17 +550,15 @@ class Task(object):
             # the control node; so it has access to this information quite
             # easily. There is anyway a corresponding int id stored in the
             # metadata backend - so this should be fine.
-            task_id = 'control-%s-%s-%s' % (run, input_step, input_task)
+            task_id = f'control-{run}-{input_step}-{input_task}'
         # Register only regular Metaflow (non control) tasks.
         if task_id is None:
             task_id = str(metadata.new_task_id(run_id, step))
+        elif ubf_context == UBF_CONTROL:
+            metadata.register_task_id(run_id, step, task_id, 0,
+                sys_tags=[CONTROL_TASK_TAG])
         else:
-            # task_id is preset only by persist_parameters() or control tasks.
-            if ubf_context == UBF_CONTROL:
-                metadata.register_task_id(run_id, step, task_id, 0,
-                    sys_tags=[CONTROL_TASK_TAG])
-            else:
-                metadata.register_task_id(run_id, step, task_id, 0)
+            metadata.register_task_id(run_id, step, task_id, 0)
 
         self.step = step
         self.flow_name = flow.name
@@ -592,7 +579,7 @@ class Task(object):
         self.monitor = monitor
 
         self._logger = logger
-        self._path = '%s/%s/%s' % (self.run_id, self.step, self.task_id)
+        self._path = f'{self.run_id}/{self.step}/{self.task_id}'
 
         self.retries = 0
         self.user_code_retries = 0
@@ -638,7 +625,7 @@ class Task(object):
                     self.user_code_retries = None
                     self.error_retries = None
                 if self.user_code_retries is not None and \
-                    self.error_retries is not None:
+                        self.error_retries is not None:
                     self.user_code_retries = max(self.user_code_retries,
                                                  user_code_retries)
                     self.error_retries = max(self.error_retries, error_retries)
@@ -652,11 +639,7 @@ class Task(object):
         self._ds.init_task()
 
     def log(self, msg, system_msg=False, pid=None, timestamp=True):
-        if pid:
-            prefix = '[%s (pid %s)] ' % (self._path, pid)
-        else:
-            prefix = '[%s] ' % self._path
-
+        prefix = f'[{self._path} (pid {pid})] ' if pid else f'[{self._path}] '
         self._logger(msg,
                      head=prefix,
                      system_msg=system_msg,
@@ -665,15 +648,14 @@ class Task(object):
 
     def _find_origin_task(self, clone_run_id, join_type):
         if self.step == '_parameters':
-            pathspec = '%s/_parameters[]' % clone_run_id
+            pathspec = f'{clone_run_id}/_parameters[]'
             origin = self.origin_ds_set.get_with_pathspec_index(pathspec)
 
             if origin is None:
                 # This is just for usability: We could rerun the whole flow
                 # if an unknown clone_run_id is provided but probably this is
                 # not what the user intended, so raise a warning
-                raise MetaflowException("Resume could not find run id *%s*" %
-                                        clone_run_id)
+                raise MetaflowException(f"Resume could not find run id *{clone_run_id}*")
             else:
                 return origin
         else:
@@ -681,7 +663,7 @@ class Task(object):
             # pick the first one
             parent_pathspec = self.input_paths[0]
             origin_parent_pathspec = \
-                self.clone_pathspec_mapping[parent_pathspec]
+                    self.clone_pathspec_mapping[parent_pathspec]
             parent = self.origin_ds_set.get_with_pathspec(origin_parent_pathspec)
             # Parent should be non-None since only clone the child if the parent
             # was successfully cloned.
@@ -696,7 +678,7 @@ class Task(object):
             else:
                 # all other transitions keep the parent's foreach stack intact
                 index = ','.join(str(s.index) for s in foreach_stack)
-            pathspec = '%s/%s[%s]' % (clone_run_id, self.step, index)
+            pathspec = f'{clone_run_id}/{self.step}[{index}]'
             return self.origin_ds_set.get_with_pathspec_index(pathspec)
 
     def _attempt_clone(self, clone_run_id, join_type):
@@ -712,8 +694,11 @@ class Task(object):
                 self._ds.clone(origin)
                 self._ds.done()
             else:
-                self.log("Cloning results of a previously run task %s"
-                         % origin.pathspec, system_msg=True)
+                self.log(
+                    f"Cloning results of a previously run task {origin.pathspec}",
+                    system_msg=True,
+                )
+
                 # Store the origin pathspec in clone_origin so this can be run
                 # as a task by the runtime.
                 self.clone_origin = origin.pathspec
@@ -729,12 +714,10 @@ class Task(object):
 
     @property
     def results(self):
-        if self._results_ds:
-            return self._results_ds
-        else:
+        if not self._results_ds:
             self._results_ds = self._flow_datastore.get_task_datastore(
                 self.run_id, self.step, self.task_id)
-            return self._results_ds
+        return self._results_ds
 
     @property
     def finished_id(self):
@@ -766,10 +749,9 @@ class TaskFailed(MetaflowException):
     headline = "Step failure"
 
     def __init__(self, task, msg=''):
-        body = "Step *%s* (task-id %s) failed" % (task.step,
-                                                  task.task_id)
+        body = f"Step *{task.step}* (task-id {task.task_id}) failed"
         if msg:
-            body = '%s: %s' % (body, msg)
+            body = f'{body}: {msg}'
         else:
             body += '.'
 
@@ -860,7 +842,7 @@ class CLIArgs(object):
                     k = k.replace('_', '-')
                     v = v if isinstance(v, (list, tuple, set)) else [v]
                     for value in v:
-                        yield '--%s' % k
+                        yield f'--{k}'
                         if not isinstance(value, bool):
                             yield to_unicode(value)
 
@@ -891,9 +873,7 @@ class Worker(object):
                           pid=self._proc.pid)
         elif not task.is_cloned:
             suffix = ' (retry).' if task.retries else '.'
-            self.task.log('Task is starting' + suffix,
-                          system_msg=True,
-                          pid=self._proc.pid)
+            self.task.log(f'Task is starting{suffix}', system_msg=True, pid=self._proc.pid)
 
         self._stdout = TruncatedBuffer('stdout', max_logs_size)
         self._stderr = TruncatedBuffer('stderr', max_logs_size)
@@ -905,8 +885,6 @@ class Worker(object):
 
         self._encoding = sys.stdout.encoding or 'UTF-8'
         self.killed = False  # Killed indicates that the task was forcibly killed
-                             # with SIGKILL by the master process.
-                             # A killed task is always considered cleaned
         self.cleaned = False  # A cleaned task is one that is shutting down and has been
                               # noticed by the runtime and queried for its state (whether or
                               # not is is properly shut down)
@@ -929,7 +907,7 @@ class Worker(object):
                                       self.task.retries,
                                       self.task.user_code_retries,
                                       self.task.ubf_context)
-        env.update(args.get_env())
+        env |= args.get_env()
         env['PYTHONUNBUFFERED'] = 'x'
         # NOTE bufsize=1 below enables line buffering which is required
         # by read_logline() below that relies on readline() not blocking
@@ -945,8 +923,7 @@ class Worker(object):
 
     def emit_log(self, msg, buf, system_msg=False):
         if mflog.is_structured(msg):
-            res = mflog.parse(msg)
-            if res:
+            if res := mflog.parse(msg):
                 # parsing successful
                 plain = res.msg
                 timestamp = res.utc_tstamp
@@ -978,10 +955,7 @@ class Worker(object):
 
     def read_logline(self, fd):
         fileobj, buf = self._logs[fd]
-        # readline() below should never block thanks to polling and
-        # line buffering. If it does, things will deadlock
-        line = fileobj.readline()
-        if line:
+        if line := fileobj.readline():
             self.emit_log(line, buf)
             return True
         else:
@@ -995,8 +969,8 @@ class Worker(object):
         if self.killed:
             return True
         if not self.cleaned:
+            msg = b'[KILLED BY ORCHESTRATOR]\n'
             for fileobj, buf in self._logs.values():
-                msg = b'[KILLED BY ORCHESTRATOR]\n'
                 self.emit_log(msg, buf, system_msg=True)
             self.cleaned = True
         return self._proc.poll() is not None
@@ -1049,8 +1023,7 @@ class Worker(object):
                                       self._stderr,
                                       system_msg=True)
             else:
-                num = self.task.results['_foreach_num_splits']
-                if num:
+                if num := self.task.results['_foreach_num_splits']:
                     self.task.log('Foreach yields %d child steps.' % num,
                                   system_msg=True,
                                   pid=self._proc.pid)

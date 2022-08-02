@@ -102,8 +102,11 @@ def create(obj,
            max_workers=None,
            workflow_timeout=None,
            log_execution_history=False):
-    obj.echo("Deploying *%s* to AWS Step Functions..." % obj.state_machine_name,
-             bold=True)
+    obj.echo(
+        f"Deploying *{obj.state_machine_name}* to AWS Step Functions...",
+        bold=True,
+    )
+
 
     check_metadata_service_version(obj)
 
@@ -167,9 +170,10 @@ def check_metadata_service_version(obj):
 
 def resolve_state_machine_name(obj, name):
     def attach_prefix(name):
-      if SFN_STATE_MACHINE_PREFIX is not None:
-          return SFN_STATE_MACHINE_PREFIX + '_' + name
-      return name
+        if SFN_STATE_MACHINE_PREFIX is not None:
+            return f'{SFN_STATE_MACHINE_PREFIX}_{name}'
+        return name
+
     project = current.get('project_name')
     obj._is_state_machine_name_hashed = False
     if project:
@@ -190,15 +194,14 @@ def resolve_state_machine_name(obj, name):
                             base64.b32encode(
                                 sha1(to_bytes(state_machine_name)) \
                                   .digest()))[:16].lower()
-            state_machine_name =\
-                '%s-%s' % (state_machine_name[:60], name_hash)
+            state_machine_name = f'{state_machine_name[:60]}-{name_hash}'
             obj._is_state_machine_name_hashed = True
     else:
         if name and VALID_NAME.search(name):
             raise MetaflowException(
                 "Name '%s' contains invalid characters." % name)
 
-        state_machine_name = attach_prefix(name if name else current.flow_name)
+        state_machine_name = attach_prefix(name or current.flow_name)
         token_prefix = state_machine_name
         is_project = False
 
@@ -307,7 +310,7 @@ def resolve_token(name,
             given_token = given_token[11:]
         token = given_token
         obj.echo('')
-        obj.echo("Using the given token, *%s*." % token)
+        obj.echo(f"Using the given token, *{token}*.")
     elif prev_token is None or generate_new_token:
         token = new_token(token_prefix, prev_token)
         if token is None:
@@ -326,13 +329,13 @@ def resolve_token(name,
 
     obj.echo('')
     obj.echo("The namespace of this production flow is")
-    obj.echo('    production:%s' % token, fg='green')
+    obj.echo(f'    production:{token}', fg='green')
     obj.echo("To analyze results of this production flow "
              "add this line in your notebooks:")
     obj.echo('    namespace(\"production:%s\")' % token, fg='green')
     obj.echo("If you want to authorize other people to deploy new versions "
              "of this flow to AWS Step Functions, they need to call")
-    obj.echo("    step-functions create --authorize %s" % token, fg='green')
+    obj.echo(f"    step-functions create --authorize {token}", fg='green')
     obj.echo("when deploying this flow to AWS Step Functions for the first "
              "time.")
     obj.echo('See "Organizing Results" at https://docs.metaflow.org/ for more '
@@ -364,7 +367,7 @@ def trigger(obj, run_id_file=None, **kwargs):
     response = StepFunctions.trigger(obj.state_machine_name, params)
 
     id = response['executionArn'].split(':')[-1]
-    run_id = 'sfn-' + id
+    run_id = f'sfn-{id}'
 
     if run_id_file:
         with open(run_id_file, 'w') as f:
@@ -437,7 +440,7 @@ def list_runs(obj,
                 )
             )
     if not found:
-        if len(states) > 0:
+        if states:
             status = ''
             for idx, state in enumerate(states):
                 if idx == 0:
@@ -446,9 +449,12 @@ def list_runs(obj,
                     status += ' and '
                 else:
                     status += ', '
-                status += '*%s*' % state
-            obj.echo('No %s executions for *%s* found on AWS Step Functions.'
-                % (status, obj.state_machine_name))
+                status += f'*{state}*'
+            obj.echo(
+                f'No {status} executions for *{obj.state_machine_name}* found on AWS Step Functions.'
+            )
+
         else:
-            obj.echo('No executions for *%s* found on AWS Step Functions.' \
-                % (obj.state_machine_name))
+            obj.echo(
+                f'No executions for *{obj.state_machine_name}* found on AWS Step Functions.'
+            )

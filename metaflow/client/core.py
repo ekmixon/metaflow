@@ -71,10 +71,7 @@ def metadata(ms):
             current_metadata.INFO = infos[1]
     else:
         # Deduce from ms; if starts with http, use service or else use local
-        if ms.startswith('http'):
-            metadata_type = 'service'
-        else:
-            metadata_type = 'local'
+        metadata_type = 'service' if ms.startswith('http') else 'local'
         res = [m for m in METADATA_PROVIDERS if m.TYPE == metadata_type]
         if not res:
             print(
@@ -105,7 +102,7 @@ def get_metadata():
     """
     if current_metadata is False:
         default_metadata()
-    return '%s@%s' % (current_metadata.TYPE, current_metadata.INFO)
+    return f'{current_metadata.TYPE}@{current_metadata.INFO}'
 
 
 def default_metadata():
@@ -121,8 +118,9 @@ def default_metadata():
         The result of get_metadata() after resetting the provider.
     """
     global current_metadata
-    default = [m for m in METADATA_PROVIDERS if m.TYPE == DEFAULT_METADATA]
-    if default:
+    if default := [
+        m for m in METADATA_PROVIDERS if m.TYPE == DEFAULT_METADATA
+    ]:
         current_metadata = default[0]
     else:
         from metaflow.plugins.metadata import LocalMetadataProvider
@@ -248,11 +246,10 @@ class Metaflow(object):
         # run in this namespace. This is_in_namespace() function
         # does this properly in this case
         all_flows = self.metadata.get_object('root', 'flow', None, None)
-        all_flows = all_flows if all_flows else []
+        all_flows = all_flows or []
         for flow in all_flows:
             try:
-                v = Flow(_object=flow)
-                yield v
+                yield Flow(_object=flow)
             except MetaflowNamespaceMismatch:
                 continue
 
@@ -355,7 +352,7 @@ class MetaflowObject(object):
             self._pathspec = pathspec
 
         if self._NAME in ('flow', 'task'):
-            self.id = str(self._object[self._NAME + '_id'])
+            self.id = str(self._object[f'{self._NAME}_id'])
         elif self._NAME == 'run':
             self.id = str(self._object['run_number'])
         elif self._NAME == 'step':
@@ -363,7 +360,7 @@ class MetaflowObject(object):
         elif self._NAME == 'artifact':
             self.id = str(self._object['name'])
         else:
-            raise MetaflowInternalError(msg="Unknown type: %s" % self._NAME)
+            raise MetaflowInternalError(msg=f"Unknown type: {self._NAME}")
 
         self._created_at = datetime.fromtimestamp(self._object['ts_epoch']/1000.0)
 
@@ -374,11 +371,12 @@ class MetaflowObject(object):
             raise MetaflowNamespaceMismatch(current_namespace)
 
     def _get_object(self, *path_components):
-        result = self._metaflow.metadata.get_object(
-            self._NAME, 'self', None, self._attempt, *path_components)
-        if not result:
-            raise MetaflowNotFound("%s does not exist" % self)
-        return result
+        if result := self._metaflow.metadata.get_object(
+            self._NAME, 'self', None, self._attempt, *path_components
+        ):
+            return result
+        else:
+            raise MetaflowNotFound(f"{self} does not exist")
 
     def __iter__(self):
         """
@@ -391,21 +389,23 @@ class MetaflowObject(object):
         Iterator[MetaflowObject]
             Iterator over all children
         """
-        query_filter = {}
-        if current_namespace:
-            query_filter = {'any_tags': current_namespace}
-
+        query_filter = {'any_tags': current_namespace} if current_namespace else {}
         unfiltered_children = self._metaflow.metadata.get_object(
             self._NAME, _CLASSES[self._CHILD_CLASS]._NAME, query_filter,
             self._attempt, *self.path_components)
-        unfiltered_children = unfiltered_children if unfiltered_children else []
-        children = filter(
+        unfiltered_children = unfiltered_children or []
+        if children := filter(
             lambda x: self._iter_filter(x),
-            (_CLASSES[self._CHILD_CLASS](attempt=self._attempt,
-                _object=obj, _parent=self, _namespace_check=False)
-                for obj in unfiltered_children))
-
-        if children:
+            (
+                _CLASSES[self._CHILD_CLASS](
+                    attempt=self._attempt,
+                    _object=obj,
+                    _parent=self,
+                    _namespace_check=False,
+                )
+                for obj in unfiltered_children
+            ),
+        ):
             return iter(sorted(children, reverse=True, key=lambda x: x.created_at))
         else:
             return iter([])
@@ -426,7 +426,7 @@ class MetaflowObject(object):
 
     @classmethod
     def _url_token(cls):
-        return '%ss' % cls._NAME
+        return f'{cls._NAME}s'
 
     def is_in_namespace(self):
         """
@@ -443,7 +443,7 @@ class MetaflowObject(object):
             return any(True for _ in self)
         else:
             return current_namespace is None or\
-                   current_namespace in self._tags
+                       current_namespace in self._tags
 
     def __str__(self):
         if self._attempt is not None:
@@ -455,9 +455,7 @@ class MetaflowObject(object):
         return str(self)
 
     def _get_child(self, id):
-        result = []
-        for p in self.path_components:
-            result.append(p)
+        result = list(self.path_components)
         result.append(id)
         return self._metaflow.metadata.get_object(
             _CLASSES[self._CHILD_CLASS]._NAME, 'self', None, self._attempt, *result)
@@ -481,8 +479,7 @@ class MetaflowObject(object):
         KeyError
             If the name does not identify a valid child object
         """
-        obj = self._get_child(id)
-        if obj:
+        if obj := self._get_child(id):
             return _CLASSES[self._CHILD_CLASS](attempt=self._attempt,
                 _object=obj, _parent=self)
         else:
@@ -601,7 +598,7 @@ class MetaflowObject(object):
 
 class MetaflowData(object):
     def __init__(self, artifacts):
-        self._artifacts = dict((art.id, art) for art in artifacts)
+        self._artifacts = {art.id: art for art in artifacts}
 
     def __getattr__(self, name):
         return self._artifacts[name].data
@@ -610,7 +607,7 @@ class MetaflowData(object):
         return var in self._artifacts
 
     def __str__(self):
-        return '<MetaflowData: %s>' % ', '.join(self._artifacts)
+        return f"<MetaflowData: {', '.join(self._artifacts)}>"
 
     def __repr__(self):
         return str(self)
@@ -705,7 +702,7 @@ class MetaflowCode(object):
         return self._tar
 
     def __str__(self):
-        return '<MetaflowCode: %s>' % self._info['script']
+        return f"<MetaflowCode: {self._info['script']}>"
 
 
 class DataArtifact(MetaflowObject):
@@ -891,7 +888,7 @@ class Task(MetaflowObject):
         """
         all_metadata = self._metaflow.metadata.get_object(
             self._NAME, 'metadata', None, self._attempt, *self.path_components)
-        all_metadata = all_metadata if all_metadata else []
+        all_metadata = all_metadata or []
         return [Metadata(name=obj.get('field_name'),
                          value=obj.get('value'),
                          created_at=obj.get('ts_epoch'),
@@ -1059,10 +1056,9 @@ class Task(MetaflowObject):
         string
             Name of the runtime this task executed on
         """
-        for t in self._tags:
-            if t.startswith('runtime:'):
-                return t.split(':')[1]
-        return None
+        return next(
+            (t.split(':')[1] for t in self._tags if t.startswith('runtime:')), None
+        )
 
     @property
     def stdout(self):
@@ -1147,19 +1143,11 @@ class Task(MetaflowObject):
         int
             attempt id for this task object
         """
-        if self._attempt is not None:
-            attempt = self._attempt
-        else:
-            # It is possible that a task fails before any metadata has been
-            # recorded. In this case, we assume that we are executing the
-            # first attempt.
-            #
-            # FIXME: Technically we are looking at the latest *recorded* attempt
-            # here. It is possible that logs exists for a newer attempt that
-            # just failed to record metadata. We could make this logic more robust
-            # and guarantee that we always return the latest available log.
-            attempt = int(self.metadata_dict.get('attempt', 0))
-        return attempt
+        return (
+            self._attempt
+            if self._attempt is not None
+            else int(self.metadata_dict.get('attempt', 0))
+        )
 
     @cached_property
     def code(self):
@@ -1173,8 +1161,7 @@ class Task(MetaflowObject):
         MetaflowCode
             Code package for this task
         """
-        code_package = self.metadata_dict.get('code-package')
-        if code_package:
+        if code_package := self.metadata_dict.get('code-package'):
             return MetaflowCode(self.path_components[0], code_package)
         return None
 
@@ -1203,15 +1190,13 @@ class Task(MetaflowObject):
         return env.get_client_info(self.path_components[0], self.metadata_dict)
 
     def _load_log(self, stream):
-        log_location = self.metadata_dict.get('log_location_%s' % stream)
-        if log_location:
+        if log_location := self.metadata_dict.get(f'log_location_{stream}'):
             return self._load_log_legacy(log_location, stream)
         else:
             return ''.join(line + '\n' for _, line in self.loglines(stream))
 
     def _get_logsize(self, stream):
-        log_location = self.metadata_dict.get('log_location_%s' % stream)
-        if log_location:
+        if log_location := self.metadata_dict.get(f'log_location_{stream}'):
             return self._legacy_log_size(log_location, stream)
         else:
             return self._log_size(stream)
@@ -1376,8 +1361,7 @@ class Step(MetaflowObject):
             Iterator over Control Task objects in this step
         """
         children = super(Step, self).__iter__()
-        filter_tags = [CONTROL_TASK_TAG]
-        filter_tags.extend(tags)
+        filter_tags = [CONTROL_TASK_TAG, *tags]
         for child in children:
             if all(tag in child.tags for tag in filter_tags):
                     yield child
@@ -1509,8 +1493,7 @@ class Run(MetaflowObject):
         MetaflowData
             Container of all artifacts produced by this task
         """
-        end = self.end_task
-        if end:
+        if end := self.end_task:
             return end.data
 
     @property
@@ -1525,11 +1508,7 @@ class Run(MetaflowObject):
         bool
             True if the run completed successfully and False otherwise
         """
-        end = self.end_task
-        if end:
-            return end.successful
-        else:
-            return False
+        return end.successful if (end := self.end_task) else False
 
     @property
     def finished(self):
@@ -1543,11 +1522,7 @@ class Run(MetaflowObject):
         bool
             True if the run completed and False otherwise
         """
-        end = self.end_task
-        if end:
-            return end.finished
-        else:
-            return False
+        return end.finished if (end := self.end_task) else False
 
     @property
     def finished_at(self):
@@ -1562,8 +1537,7 @@ class Run(MetaflowObject):
         datetime
             Datetime of when the run finished
         """
-        end = self.end_task
-        if end:
+        if end := self.end_task:
             return end.finished_at
 
     @property

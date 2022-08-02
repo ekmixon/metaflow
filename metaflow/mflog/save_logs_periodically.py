@@ -23,10 +23,7 @@ class SaveLogsPeriodicallySidecar(object):
 
     def _update_loop(self):
         def _file_size(path):
-            if os.path.exists(path):
-                return os.path.getsize(path)
-            else:
-                return 0
+            return os.path.getsize(path) if os.path.exists(path) else 0
 
         # these env vars are set by mflog.mflog_env
         FILES = [os.environ['MFLOG_STDOUT'], os.environ['MFLOG_STDERR']]

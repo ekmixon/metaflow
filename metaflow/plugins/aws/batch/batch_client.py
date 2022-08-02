@@ -43,8 +43,7 @@ class BatchClient(object):
 
     def describe_jobs(self, job_ids):
         for jobIds in [job_ids[i:i+100] for i in range(0, len(job_ids), 100)]:
-            for jobs in self._client.describe_jobs(jobs=jobIds)['jobs']:
-                yield jobs
+            yield from self._client.describe_jobs(jobs=jobIds)['jobs']
 
     def describe_job_queue(self, job_queue):
         paginator = self._client.get_paginator('describe_job_queues').paginate(
@@ -113,15 +112,14 @@ class BatchJob(object):
         else:
             response = self._client.describe_job_queues(jobQueues=[job_queue])
             if len(response['jobQueues']) == 0:
-                raise BatchJobException(
-                    'AWS Batch Job Queue %s not found.' % job_queue)
+                raise BatchJobException(f'AWS Batch Job Queue {job_queue} not found.')
             compute_environment = response['jobQueues'][0] \
-                                    ['computeEnvironmentOrder'][0] \
-                                    ['computeEnvironment']
+                                        ['computeEnvironmentOrder'][0] \
+                                        ['computeEnvironment']
             response = self._client.describe_compute_environments(
                 computeEnvironments=[compute_environment])
             platform = response['computeEnvironments'][0] \
-                            ['computeResources']['type']
+                                ['computeResources']['type']
 
         # compose job definition
         job_definition = {
@@ -146,7 +144,7 @@ class BatchJob(object):
             'propagateTags': True
         }
 
-        if platform == 'FARGATE' or platform == 'FARGATE_SPOT':
+        if platform in ['FARGATE', 'FARGATE_SPOT']:
             if execution_role is None:
                 raise BatchJobException(
                     'No AWS Fargate task execution IAM role found. Please see '
@@ -154,41 +152,44 @@ class BatchJob(object):
                     'and set the role as METAFLOW_ECS_FARGATE_EXECUTION_ROLE '
                     'environment variable.')
             job_definition['containerProperties']['executionRoleArn'] = \
-                execution_role
+                    execution_role
             job_definition['platformCapabilities'] = ['FARGATE']
             job_definition['containerProperties']['networkConfiguration'] = \
-                {'assignPublicIp': 'ENABLED'}
-        
-        if platform == 'EC2' or platform == 'SPOT':
+                    {'assignPublicIp': 'ENABLED'}
+
+        if platform in ['EC2', 'SPOT']:
             if 'linuxParameters' not in job_definition['containerProperties']:
                 job_definition['containerProperties']['linuxParameters'] = {}
             if shared_memory is not None:
                 if not (isinstance(shared_memory, (int, unicode, basestring)) and 
                     int(shared_memory) > 0):
                     raise BatchJobException(
-                        'Invalid shared memory size value ({}); '
-                        'it should be greater than 0'.format(shared_memory))
+                        f'Invalid shared memory size value ({shared_memory}); it should be greater than 0'
+                    )
+
                 else:
                     job_definition['containerProperties'] \
-                        ['linuxParameters']['sharedMemorySize'] = int(shared_memory)
+                            ['linuxParameters']['sharedMemorySize'] = int(shared_memory)
             if swappiness is not None: 
                 if not (isinstance(swappiness, (int, unicode, basestring)) and 
                     int(swappiness) >= 0 and int(swappiness) < 100):
                     raise BatchJobException(
-                        'Invalid swappiness value ({}); '
-                        '(should be 0 or greater and less than 100)'.format(swappiness))
+                        f'Invalid swappiness value ({swappiness}); (should be 0 or greater and less than 100)'
+                    )
+
                 else:
                     job_definition['containerProperties'] \
-                        ['linuxParameters']['swappiness'] = int(swappiness)
+                            ['linuxParameters']['swappiness'] = int(swappiness)
             if max_swap is not None: 
                 if not (isinstance(max_swap, (int, unicode, basestring)) and 
                     int(max_swap) >= 0):
                     raise BatchJobException(
-                        'Invalid swappiness value ({}); '
-                        '(should be 0 or greater)'.format(max_swap))
+                        f'Invalid swappiness value ({max_swap}); (should be 0 or greater)'
+                    )
+
                 else:
                     job_definition['containerProperties'] \
-                        ['linuxParameters']['maxSwap'] = int(max_swap)
+                            ['linuxParameters']['maxSwap'] = int(max_swap)
 
         if host_volumes:
             job_definition['containerProperties']['volumes'] = []
@@ -203,8 +204,8 @@ class BatchJob(object):
                 )
 
         # check if job definition already exists
-        def_name = 'metaflow_%s' % \
-            hashlib.sha224(str(job_definition).encode('utf-8')).hexdigest()
+        def_name = f"metaflow_{hashlib.sha224(str(job_definition).encode('utf-8')).hexdigest()}"
+
         payload = {'jobDefinitionName': def_name, 'status': 'ACTIVE'}
         response = self._client.describe_job_definitions(**payload)
         if len(response['jobDefinitions']) > 0:
@@ -215,8 +216,10 @@ class BatchJob(object):
         try:
             response = self._client.register_job_definition(**job_definition)
         except Exception as ex:
-            if type(ex).__name__ == 'ParamValidationError' and \
-                    (platform == 'FARGATE' or platform == 'FARGATE_SPOT'):
+            if type(ex).__name__ == 'ParamValidationError' and platform in [
+                'FARGATE',
+                'FARGATE_SPOT',
+            ]:
                 raise BatchJobException(
                     '%s \nPlease ensure you have installed boto3>=1.16.29 if '
                     'you intend to launch AWS Batch jobs on AWS Fargate '

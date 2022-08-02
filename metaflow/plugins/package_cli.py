@@ -19,9 +19,12 @@ def package(obj):
 @click.pass_obj
 def info(obj):
     obj.echo('Status of the current working directory:', fg='magenta', bold=False)
-    obj.echo_always('Hash: *%s*' % sha1(obj.package.blob).hexdigest(),
-                    highlight='green',
-                    highlight_bold=False)
+    obj.echo_always(
+        f'Hash: *{sha1(obj.package.blob).hexdigest()}*',
+        highlight='green',
+        highlight_bold=False,
+    )
+
     obj.echo_always('Package size: *%d* KB' % (len(obj.package.blob) / 1024),
                     highlight='green',
                     highlight_bold=False)
@@ -45,6 +48,4 @@ def list(obj):
 def save(obj, path):
     with open(path, 'wb') as f:
         f.write(obj.package.blob)
-    obj.echo('Code package saved in *%s*.' % path,
-             fg='magenta',
-             bold=False)
+    obj.echo(f'Code package saved in *{path}*.', fg='magenta', bold=False)

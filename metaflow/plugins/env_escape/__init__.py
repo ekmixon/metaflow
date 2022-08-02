@@ -64,22 +64,24 @@ def generate_trampolines(python_path):
     python_interpreter_path = ENV_ESCAPE_PY
     max_pickle_version = int(ENV_ESCAPE_PICKLE_VERSION)
 
-    paths = [os.path.dirname(os.path.abspath(__file__)) + "/configurations"]
+    paths = [f"{os.path.dirname(os.path.abspath(__file__))}/configurations"]
     try:
         import metaflow_extensions.plugins.env_escape as custom_escape
     except ImportError as e:
         ver = sys.version_info[0] * 10 + sys.version_info[1]
-        if ver >= 36:
-            # e.name is set to the name of the package that fails to load
-            # so don't error ONLY IF the error is importing this module (but do
-            # error if there is a transitive import error)
-            if not (isinstance(e, ModuleNotFoundError) and e.name in [
-                    'metaflow_extensions', 'metaflow_extensions.plugins',
-                    'metaflow_extensions.plugins.env_escape']):
-                print(
-                    "Cannot load metaflow_extensions env escape configurations -- "
-                    "if you want to ignore, uninstall metaflow_extensions package")
-                raise
+        if ver >= 36 and not (
+            isinstance(e, ModuleNotFoundError)
+            and e.name
+            in [
+                'metaflow_extensions',
+                'metaflow_extensions.plugins',
+                'metaflow_extensions.plugins.env_escape',
+            ]
+        ):
+            print(
+                "Cannot load metaflow_extensions env escape configurations -- "
+                "if you want to ignore, uninstall metaflow_extensions package")
+            raise
     else:
         paths.append(os.path.dirname(os.path.abspath(custom_escape.__file__)) +
                      "/configurations")
@@ -92,9 +94,8 @@ def generate_trampolines(python_path):
                 if dir_name.startswith('emulate_'):
                     module_names = dir_name[8:].split("__")
                     for module_name in module_names:
-                        with open(os.path.join(
-                                python_path, module_name + ".py"), mode='w') as f:
-                            f.write("""
+                        with open(os.path.join(python_path, f"{module_name}.py"), mode='w') as f:
+                                                        f.write("""
 import importlib
 import os
 import sys
@@ -149,18 +150,18 @@ if not "{python_path}":
         "Trying to access an escaped module ({module_name}) without a valid interpreter")
 load()
 """ .format(
-    python_path=python_interpreter_path,
-    max_pickle_version=max_pickle_version,
-    path=path,
-    prefixes=module_names,
-    module_name=module_name
-))
+                                python_path=python_interpreter_path,
+                                max_pickle_version=max_pickle_version,
+                                path=path,
+                                prefixes=module_names,
+                                module_name=module_name
+                            ))
 
 
 def init(python_interpreter_path, max_pickle_version):
     # This function will look in the configurations directory and setup
     # the proper overrides
-    config_dir = os.path.dirname(os.path.abspath(__file__)) + "/configurations"
+    config_dir = f"{os.path.dirname(os.path.abspath(__file__))}/configurations"
 
     for path in os.listdir(config_dir):
         path = os.path.join(config_dir, path)

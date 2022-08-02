@@ -18,20 +18,20 @@ MetaDatum = namedtuple('MetaDatum',
 attempt_id_re = re.compile(r"attempt_id:([0-9]+)")
 
 class MetadataProviderMeta(type):
-    def __new__(metaname, classname, bases, attrs):
-        return type.__new__(metaname, classname, bases, attrs)
+    def __new__(cls, classname, bases, attrs):
+        return type.__new__(cls, classname, bases, attrs)
 
-    def _get_info(classobject):
-        if not classobject._INFO:
-            classobject._INFO = classobject.default_info()
-        return classobject._INFO
+    def _get_info(self):
+        if not self._INFO:
+            self._INFO = self.default_info()
+        return self._INFO
 
-    def _set_info(classobject, val):
-        v = classobject.compute_info(val)
-        classobject._INFO = v
+    def _set_info(self, val):
+        v = self.compute_info(val)
+        self._INFO = v
 
-    def __init__(classobject, classname, bases, attrs):
-        classobject._INFO = None
+    def __init__(self, classname, bases, attrs):
+        self._INFO = None
 
     INFO = property(_get_info, _set_info)
 
@@ -371,15 +371,18 @@ class MetadataProvider(object):
         sub_order = obj_order.get(sub_type)
 
         if type_order is None:
-            raise MetaflowInternalError(msg='Cannot find type %s' % obj_type)
+            raise MetaflowInternalError(msg=f'Cannot find type {obj_type}')
         if type_order > 5:
-            raise MetaflowInternalError(msg='Type %s is not allowed' % obj_type)
+            raise MetaflowInternalError(msg=f'Type {obj_type} is not allowed')
 
         if sub_order is None:
-            raise MetaflowInternalError(msg='Cannot find subtype %s' % sub_type)
+            raise MetaflowInternalError(msg=f'Cannot find subtype {sub_type}')
 
         if type_order >= sub_order:
-            raise MetaflowInternalError(msg='Subtype %s not allowed for %s' % (sub_type, obj_type))
+            raise MetaflowInternalError(
+                msg=f'Subtype {sub_type} not allowed for {obj_type}'
+            )
+
 
         # Metadata is always only at the task level
         if sub_type == 'metadata' and obj_type != 'task':
@@ -421,18 +424,15 @@ class MetadataProvider(object):
             'ts_epoch': int(round(time.time() * 1000))}
 
     def _run_to_json(self, run_id=None, tags=None, sys_tags=None):
-        if run_id is not None:
-            d = {'run_number': run_id}
-        else:
-            d = {}
-        d.update(self._all_obj_elements(tags, sys_tags))
+        d = {'run_number': run_id} if run_id is not None else {}
+        d |= self._all_obj_elements(tags, sys_tags)
         return d
 
     def _step_to_json(self, run_id, step_name, tags=None, sys_tags=None):
         d = {
             'run_number': run_id,
             'step_name': step_name}
-        d.update(self._all_obj_elements(tags, sys_tags))
+        d |= self._all_obj_elements(tags, sys_tags)
         return d
 
     def _task_to_json(self, run_id, step_name, task_id=None, tags=None, sys_tags=None):
@@ -441,7 +441,7 @@ class MetadataProvider(object):
             'step_name': step_name}
         if task_id is not None:
             d['task_id'] = task_id
-        d.update(self._all_obj_elements(tags, sys_tags))
+        d |= self._all_obj_elements(tags, sys_tags)
         return d
 
     def _object_to_json(
@@ -467,8 +467,10 @@ class MetadataProvider(object):
                 'type': 'metaflow.artifact',
                 'sha': art.sha,
                 'ds_type': art.ds_type,
-                'location': art.url if art.url else ':root:%s' % art.ds_root}
-            d.update(self._all_obj_elements(self.sticky_tags, self.sticky_sys_tags))
+                'location': art.url or f':root:{art.ds_root}',
+            }
+
+            d |= self._all_obj_elements(self.sticky_tags, self.sticky_sys_tags)
             result.append(d)
         return result
 
@@ -552,8 +554,7 @@ class MetadataProvider(object):
             if all_tags is None:
                 all_tags = []
             for t in all_tags:
-                match_result = attempt_id_re.match(t)
-                if match_result:
+                if match_result := attempt_id_re.match(t):
                     if int(match_result.group(1)) == attempt_id:
                         post_filter.append(v)
                     break

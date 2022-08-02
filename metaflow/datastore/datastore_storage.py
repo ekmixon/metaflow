@@ -39,7 +39,7 @@ class DataStoreStorage(object):
     list_content_result = namedtuple('list_content_result', 'path is_file')
 
     def __init__(self, root=None):
-        self.datastore_root = root if root else self.datastore_root
+        self.datastore_root = root or self.datastore_root
 
     @classmethod
     def get_datastore_root_from_config(cls, echo, create_on_absent=True):
@@ -97,7 +97,7 @@ class DataStoreStorage(object):
 
     @classmethod
     def path_join(cls, *components):
-        if len(components) == 0:
+        if not components:
             return ''
         component = components[0].rstrip('/')
         components = [component] + [c.strip('/') for c in components[1:]]

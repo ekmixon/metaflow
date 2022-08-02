@@ -113,7 +113,6 @@ class Stub(with_metaclass(StubMetaClass, object)):
 
     def __del__(self):
         try:
-            pass
             self.___refcount___ -= 1
             if self.___refcount___ == 0:
                fwd_request(self, OP_DEL)
@@ -238,17 +237,17 @@ class MetaWithConnection(StubMetaClass):
     def __new__(cls, class_name, base_classes, class_dict, connection):
         return type.__new__(cls, class_name, base_classes, class_dict)
 
-    def __init__(cls, class_name, base_classes, class_dict, connection):
-        cls.___class_remote_class_name___ = class_name
-        cls.___class_connection___ = connection
-        super(MetaWithConnection, cls).__init__(class_name, base_classes, class_dict)
+    def __init__(self, class_name, base_classes, class_dict, connection):
+        self.___class_remote_class_name___ = class_name
+        self.___class_connection___ = connection
+        super(MetaWithConnection, self).__init__(class_name, base_classes, class_dict)
 
-    def __call__(cls, *args, **kwargs):
-        if len(args) > 0 and id(args[0]) == id(cls.___class_connection___):
-            return super(MetaWithConnection, cls).__call__(*args, **kwargs)
+    def __call__(self, *args, **kwargs):
+        if args and id(args[0]) == id(self.___class_connection___):
+            return super(MetaWithConnection, self).__call__(*args, **kwargs)
         else:
-            return cls.___class_connection___.stub_request(
-                None, OP_INIT, cls.___class_remote_class_name___, *args, **kwargs
+            return self.___class_connection___.stub_request(
+                None, OP_INIT, self.___class_remote_class_name___, *args, **kwargs
             )
 
 

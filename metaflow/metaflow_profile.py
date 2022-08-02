@@ -5,7 +5,7 @@ from contextlib import contextmanager
 @contextmanager
 def profile(label, stats_dict=None):
     if stats_dict is None:
-        print('PROFILE: %s starting' % label)
+        print(f'PROFILE: {label} starting')
     start = time.time()
     yield
     took = int((time.time() - start) * 1000)

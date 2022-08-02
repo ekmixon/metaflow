@@ -9,7 +9,7 @@ class Boto3ClientProvider(object):
     def get_client(module, with_error=False, params={}):
         from metaflow.exception import MetaflowException
         from metaflow.metaflow_config import AWS_SANDBOX_ENABLED, \
-            AWS_SANDBOX_STS_ENDPOINT_URL, AWS_SANDBOX_API_KEY
+                AWS_SANDBOX_STS_ENDPOINT_URL, AWS_SANDBOX_API_KEY
         import requests
         try:
             import boto3
@@ -22,7 +22,7 @@ class Boto3ClientProvider(object):
             global cached_aws_sandbox_creds
             if cached_aws_sandbox_creds is None:
                 # authenticate using STS
-                url = "%s/auth/token" % AWS_SANDBOX_STS_ENDPOINT_URL
+                url = f"{AWS_SANDBOX_STS_ENDPOINT_URL}/auth/token"
                 headers = {
                     'x-api-key': AWS_SANDBOX_API_KEY
                 }
@@ -52,6 +52,8 @@ def get_aws_client(module, with_error=False, params={}):
                 cached_provider_class = p
                 break
         else:
-            raise ValueError("Cannot find AWS Client provider %s"
-                             % DEFAULT_AWS_CLIENT_PROVIDER)
+            raise ValueError(
+                f"Cannot find AWS Client provider {DEFAULT_AWS_CLIENT_PROVIDER}"
+            )
+
     return cached_provider_class.get_client(module, with_error, params)

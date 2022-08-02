@@ -79,27 +79,26 @@ class MetaflowEnvironment(object):
         return "Local environment"
 
     def get_package_commands(self, code_package_url):
-        cmds = [BASH_MFLOG,
-                "mflog \'Setting up task environment.\'",
-                "%s -m pip install awscli click requests boto3 -qqq" 
-                    % self._python(),
-                "mkdir metaflow",
-                "cd metaflow",
-                "mkdir .metaflow", # mute local datastore creation log
-                "i=0; while [ $i -le 5 ]; do "
-                    "mflog \'Downloading code package...\'; "
-                    "%s -m awscli s3 cp %s job.tar >/dev/null && \
+        return [
+            BASH_MFLOG,
+            "mflog \'Setting up task environment.\'",
+            f"{self._python()} -m pip install awscli click requests boto3 -qqq",
+            "mkdir metaflow",
+            "cd metaflow",
+            "mkdir .metaflow",
+            "i=0; while [ $i -le 5 ]; do "
+            "mflog \'Downloading code package...\'; "
+            "%s -m awscli s3 cp %s job.tar >/dev/null && \
                         mflog \'Code package downloaded.\' && break; "
-                    "sleep 10; i=$((i+1)); "
-                "done" % (self._python(), code_package_url),
-                "if [ $i -gt 5 ]; then "
-                    "mflog \'Failed to download code package from %s "
-                    "after 6 tries. Exiting...\' && exit 1; "
-                "fi" % code_package_url,
-                "TAR_OPTIONS='--warning=no-timestamp' tar xf job.tar",
-                "mflog \'Task is starting.\'",
-                ]
-        return cmds
+            "sleep 10; i=$((i+1)); "
+            "done" % (self._python(), code_package_url),
+            "if [ $i -gt 5 ]; then "
+            "mflog \'Failed to download code package from %s "
+            "after 6 tries. Exiting...\' && exit 1; "
+            "fi" % code_package_url,
+            "TAR_OPTIONS='--warning=no-timestamp' tar xf job.tar",
+            "mflog \'Task is starting.\'",
+        ]
 
     def get_environment_info(self):
         global version_cache
@@ -130,7 +129,4 @@ class MetaflowEnvironment(object):
         return self._python()
 
     def _python(self):
-        if R.use_r():
-            return "python3"
-        else:
-            return "python"
+        return "python3" if R.use_r() else "python"

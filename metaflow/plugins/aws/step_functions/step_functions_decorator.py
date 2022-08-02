@@ -22,10 +22,11 @@ class StepFunctionsInternalDecorator(StepDecorator):
                       max_user_code_retries,
                       ubf_context,
                       inputs):
-        meta = {}
-        meta['aws-step-functions-execution'] = os.environ['METAFLOW_RUN_ID']
-        meta['aws-step-functions-state-machine'] =\
-                                        os.environ['SFN_STATE_MACHINE']
+        meta = {
+            'aws-step-functions-execution': os.environ['METAFLOW_RUN_ID'],
+            'aws-step-functions-state-machine': os.environ['SFN_STATE_MACHINE'],
+        }
+
         entries = [MetaDatum(
             field=k, value=v, type=k, tags=["attempt_id:{0}".format(retry_count)])
             for k, v in meta.items()]

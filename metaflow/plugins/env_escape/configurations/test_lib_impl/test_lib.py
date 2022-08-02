@@ -24,10 +24,10 @@ class TestClass1(object):
         return self._value
 
     def __str__(self):
-        return "My str representation is %s" % str(self._value)
+        return f"My str representation is {str(self._value)}"
 
     def __repr__(self):
-        return "My repr representation is %s" % str(self._value)
+        return f"My repr representation is {str(self._value)}"
 
     @property
     def value(self):
@@ -62,7 +62,7 @@ class TestClass2(object):
         self._mylist = [value + stride * i for i in range(count)]
 
     def something(self, val):
-        return "In Test2 with %s" % val
+        return f"In Test2 with {val}"
 
     def __iter__(self):
         self._pos = 0
@@ -80,7 +80,7 @@ class TestClass3(object):
         print("I am Class3")
 
     def thirdfunction(self, val):
-        print("Got value: %s" % val)
+        print(f"Got value: {val}")
         # raise AttributeError("Some weird error")
 
     def raiseSomething(self):

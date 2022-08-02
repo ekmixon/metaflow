@@ -44,7 +44,7 @@ class MetaflowPackage(object):
         if addl_suffixes is None:
             addl_suffixes = []
         root = to_unicode(root)  # handle files/folder with non ascii chars
-        prefixlen = len('%s/' % os.path.dirname(root))
+        prefixlen = len(f'{os.path.dirname(root)}/')
         for path, dirs, files in os.walk(root):
             if exclude_hidden and '/.' in path:
                 continue
@@ -65,30 +65,26 @@ class MetaflowPackage(object):
         """
         # We want the following contents in the tarball
         # Metaflow package itself
-        for path_tuple in self._walk(self.metaflow_root, exclude_hidden=False):
-            yield path_tuple
+        yield from self._walk(self.metaflow_root, exclude_hidden=False)
         # Metaflow customization if any
         if self.metaflow_extensions_root:
-            for path_tuple in self._walk(
-                    self.metaflow_extensions_root,
-                    exclude_hidden=False,
-                    addl_suffixes=self.metaflow_extensions_addl_suffixes):
-                yield path_tuple
+            yield from self._walk(
+                self.metaflow_extensions_root,
+                exclude_hidden=False,
+                addl_suffixes=self.metaflow_extensions_addl_suffixes,
+            )
+
         # the package folders for environment
-        for path_tuple in self.environment.add_to_package():
-            yield path_tuple
+        yield from self.environment.add_to_package()
         if R.use_r():
             # the R working directory
-            for path_tuple in self._walk('%s/' % R.working_dir()):
-                yield path_tuple
+            yield from self._walk(f'{R.working_dir()}/')
             # the R package
-            for path_tuple in R.package_paths():
-                yield path_tuple
+            yield from R.package_paths()
         else:
             # the user's working directory
-            flowdir = os.path.dirname(os.path.abspath(sys.argv[0])) + '/'
-            for path_tuple in self._walk(flowdir):
-                yield path_tuple
+            flowdir = f'{os.path.dirname(os.path.abspath(sys.argv[0]))}/'
+            yield from self._walk(flowdir)
 
     def _add_info(self, tar):
         info = tarfile.TarInfo('INFO')
@@ -118,5 +114,4 @@ class MetaflowPackage(object):
         return blob
 
     def __str__(self):
-        return '<code package for flow %s (created @ %s)>' % \
-            (self.flow_name, time.strftime("%a, %d %b %Y %H:%M:%S", self.create_time))
+        return f'<code package for flow {self.flow_name} (created @ {time.strftime("%a, %d %b %Y %H:%M:%S", self.create_time)})>'

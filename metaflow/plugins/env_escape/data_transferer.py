@@ -119,12 +119,11 @@ def _dump_container(obj_type, transferer, obj):
     try:
         new_obj = transferer.pickle_container(obj)
     except RuntimeError as e:
-        raise RuntimeError("Cannot dump container %s: %s" % (str(obj), e))
+        raise RuntimeError(f"Cannot dump container {str(obj)}: {e}")
     if new_obj is None:
         return _dump_simple(obj_type, transferer, obj)
-    else:
-        _, dump = _dump_simple(obj_type, transferer, new_obj)
-        return True, dump
+    _, dump = _dump_simple(obj_type, transferer, new_obj)
+    return True, dump
 
 
 @_register_loader(_container_types)
@@ -197,14 +196,11 @@ class DataTransferer(object):
 
     def can_dump(self, obj):
         r = DataTransferer._can_dump(self.can_dump, obj)
-        if not r:
-            return self._connection.can_encode(obj)
-        return False
+        return False if r else self._connection.can_encode(obj)
 
     def dump(self, obj):
         obj_type = type(obj)
-        handler = self._dumpers.get(type(obj))
-        if handler:
+        if handler := self._dumpers.get(type(obj)):
             attr, v = handler(self, obj)
             return {
                 FIELD_TYPE: self._types_to_encoding[obj_type],
@@ -220,15 +216,16 @@ class DataTransferer(object):
                                  protocol=defaultProtocol)
                 ).decode("utf-8")
             except ValueError as e:
-                raise RuntimeError("Unable to dump non base type: %s" % e)
+                raise RuntimeError(f"Unable to dump non base type: {e}")
             return {FIELD_TYPE: -1, FIELD_INLINE_VALUE: json_obj}
 
     def load(self, json_obj):
         obj_type = json_obj.get(FIELD_TYPE)
         if obj_type is None:
             raise RuntimeError(
-                "Malformed message -- missing %s: %s" % (FIELD_TYPE, str(json_obj))
+                f"Malformed message -- missing {FIELD_TYPE}: {str(json_obj)}"
             )
+
         if obj_type == -1:
             # This is something that the connection handles
             try:
@@ -237,16 +234,15 @@ class DataTransferer(object):
                                  encoding="utf-8")
                 )
             except ValueError as e:
-                raise RuntimeError("Unable to load non base type: %s" % e)
-        handler = self._loaders.get(obj_type)
-        if handler:
+                raise RuntimeError(f"Unable to load non base type: {e}")
+        if handler := self._loaders.get(obj_type):
             json_subobj = json_obj.get(FIELD_INLINE_VALUE)
             if json_subobj is not None:
                 return handler(
                     self, json_obj.get(FIELD_ANNOTATION), json_obj[FIELD_INLINE_VALUE]
                 )
             raise RuntimeError("Non inline value not supported")
-        raise RuntimeError("Unable to find handler for type %s" % obj_type)
+        raise RuntimeError(f"Unable to find handler for type {obj_type}")
 
     # _container_types = (list, tuple, set, frozenset, dict, OrderedDict)
     def _transform_container(self, checker, processor, recursor, obj, in_place=True):
@@ -259,9 +255,7 @@ class DataTransferer(object):
             elif checker(obj):
                 return processor(obj)
             else:
-                raise RuntimeError(
-                    "Cannot pickle object of type %s: %s" % (obj_type, str(obj))
-                )
+                raise RuntimeError(f"Cannot pickle object of type {obj_type}: {str(obj)}")
 
         cast_to = None
         key_change_allowed = True
@@ -317,10 +311,7 @@ class DataTransferer(object):
                     obj = copy(obj)
                     in_place = True
                 if sub_key:
-                    if sub_val:
-                        new_items[sub_key] = sub_val
-                    else:
-                        new_items[sub_key] = v
+                    new_items[sub_key] = sub_val or v
                     del_keys.append(k)
                 else:
                     if sub_val:
@@ -329,16 +320,14 @@ class DataTransferer(object):
                 del obj[k]
             obj.update(new_items)
         else:
-            raise RuntimeError("Unknown container type: %s" % type(obj))
+            raise RuntimeError(f"Unknown container type: {type(obj)}")
         if update_default_factory:
             # We do this here because we now unpickled the reference
             # to default_dict and can set it back up again.
             obj.default_factory = obj['__default_factory']
             del obj['__default_factory']
         if has_changes:
-            if cast_to:
-                return cast_to(obj)
-            return obj
+            return cast_to(obj) if cast_to else obj
         return None
 
     def pickle_container(self, obj):
@@ -367,7 +356,7 @@ class DataTransferer(object):
             return True
         if obj_type == str:
             return True
-        if obj_type == dict or obj_type == OrderedDict:
+        if obj_type in [dict, OrderedDict]:
             return all(
                 (recursive_func(k) and recursive_func(v) for k, v in obj.items())
             )

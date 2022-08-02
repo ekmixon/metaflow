@@ -48,7 +48,7 @@ class CurrentSingletonTest(MetaflowTest):
         self.usernames = set(chain(*(i.usernames for i in inputs)))
         self.task_data = {}
         for i in inputs:
-            self.task_data.update(i.task_data)
+            self.task_data |= i.task_data
 
         # add data for the join step
         self.project_names.add(current.project_name)

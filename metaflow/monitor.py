@@ -62,8 +62,8 @@ class Monitor(NullMonitor):
     @contextmanager
     def measure(self, name):
         if self.sidecar_process is not None:
-            timer = Timer(name + "_timer", self.env_info)
-            counter = Counter(name + "_counter", self.env_info)
+            timer = Timer(f"{name}_timer", self.env_info)
+            counter = Counter(f"{name}_counter", self.env_info)
             timer.start()
             counter.increment()
             yield
@@ -251,6 +251,4 @@ def get_monitor_msg_type(msg):
     if msg.payload.get('gauge') is not None:
         return GAUGE_TYPE
     if msg.payload.get('counter') is not None:
-        if msg.payload.get('timer') is not None:
-            return MEASURE_TYPE
-        return COUNTER_TYPE
+        return MEASURE_TYPE if msg.payload.get('timer') is not None else COUNTER_TYPE

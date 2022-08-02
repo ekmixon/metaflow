@@ -7,7 +7,7 @@ class DebugEventLogger(object):
     TYPE = 'debugLogger'
 
     def log(self, msg):
-        sys.stderr.write('event_logger: ' + str(msg)+'\n')
+        sys.stderr.write(f'event_logger: {str(msg)}' + '\n')
 
     def process_message(self, msg):
         # type: (Message) -> None

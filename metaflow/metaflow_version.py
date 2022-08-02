@@ -33,25 +33,27 @@ if name == "nt":
         possible_locations = []
         # look in program files for msysgit
         if "PROGRAMFILES(X86)" in environ:
-            possible_locations.append("%s/Git/cmd/git.exe" %
-                                      environ["PROGRAMFILES(X86)"])
+            possible_locations.append(f'{environ["PROGRAMFILES(X86)"]}/Git/cmd/git.exe')
         if "PROGRAMFILES" in environ:
-            possible_locations.append("%s/Git/cmd/git.exe" %
-                                      environ["PROGRAMFILES"])
+            possible_locations.append(f'{environ["PROGRAMFILES"]}/Git/cmd/git.exe')
         # look for the github version of git
         if "LOCALAPPDATA" in environ:
-            github_dir = "%s/GitHub" % environ["LOCALAPPDATA"]
+            github_dir = f'{environ["LOCALAPPDATA"]}/GitHub'
             if path.isdir(github_dir):
-                for subdir in listdir(github_dir):
-                    if not subdir.startswith("PortableGit"):
-                        continue
-                    possible_locations.append("%s/%s/bin/git.exe" %
-                                              (github_dir, subdir))
-        for possible_location in possible_locations:
-            if path.isfile(possible_location):
-                return possible_location
-        # git was not found
-        return "git"
+                possible_locations.extend(
+                    f"{github_dir}/{subdir}/bin/git.exe"
+                    for subdir in listdir(github_dir)
+                    if subdir.startswith("PortableGit")
+                )
+
+        return next(
+            (
+                possible_location
+                for possible_location in possible_locations
+                if path.isfile(possible_location)
+            ),
+            "git",
+        )
 
     GIT_COMMAND = find_git_on_windows()
 
@@ -83,16 +85,12 @@ def format_git_describe(git_str, pep440=False):
     """format the result of calling 'git describe' as a python version"""
     if git_str is None:
         return None
-    if "-" not in git_str:  # currently at a tag
+    if "-" not in git_str:
         return git_str
-    else:
-        # formatted as version-N-githash
-        # want to convert to version.postN-githash
-        git_str = git_str.replace("-", ".post", 1)
-        if pep440:  # does not allow git hash afterwards
-            return git_str.split("-")[0]
-        else:
-            return git_str.replace("-g", "+git")
+    # formatted as version-N-githash
+    # want to convert to version.postN-githash
+    git_str = git_str.replace("-", ".post", 1)
+    return git_str.split("-")[0] if pep440 else git_str.replace("-g", "+git")
 
 
 def read_info_version():

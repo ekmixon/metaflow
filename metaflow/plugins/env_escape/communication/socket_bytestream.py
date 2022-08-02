@@ -104,10 +104,7 @@ class SocketByteStream(ByteStream):
             self.close()
             exc = sys.exc_info()[1]
             found_error = None
-            if hasattr(exc, "errno"):
-                found_error = exc.errno
-            else:
-                found_error = exc[0]
+            found_error = exc.errno if hasattr(exc, "errno") else exc[0]
             if found_error == errno.EBADF:
                 raise EOFError()
             else:

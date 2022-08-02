@@ -168,7 +168,7 @@ def worker(result_file_name, queue, mode):
                         # TODO specific error message for out of disk space
                     # If we need the metadata, get it and write it out
                     if pre_op_info:
-                        with open('%s_meta' % url.local, mode='w') as f:
+                        with open(f'{url.local}_meta', mode='w') as f:
                             args = {'size': resp['ContentLength']}
                             if resp['ContentType']:
                                 args['content_type'] = resp['ContentType']
@@ -218,7 +218,7 @@ def start_workers(mode, urls, num_workers):
         queue.put((elt, idx))
 
     # 2. push end-of-queue markers
-    for i in range(num_workers):
+    for _ in range(num_workers):
         queue.put((None, None))
 
     # 3. Prepare the result structure
@@ -328,7 +328,7 @@ class S3Ops(object):
     @aws_retry
     def list_prefix(self, prefix_url, delimiter=''):
         self.reset_client()
-        url_base = 's3://%s/' % prefix_url.bucket
+        url_base = f's3://{prefix_url.bucket}/'
         try:
             paginator = self.s3.get_paginator('list_objects_v2')
             urls = []
@@ -382,20 +382,19 @@ def op_list_prefix_nonrecursive(prefix_urls):
 
 def exit(exit_code, url):
     if exit_code == ERROR_INVALID_URL:
-        msg = 'Invalid url: %s' % url.url
+        msg = f'Invalid url: {url.url}'
     elif exit_code == ERROR_NOT_FULL_PATH:
-        msg = 'URL not a full path: %s' % url.url
+        msg = f'URL not a full path: {url.url}'
     elif exit_code == ERROR_URL_NOT_FOUND:
-        msg = 'URL not found: %s' % url.url
+        msg = f'URL not found: {url.url}'
     elif exit_code == ERROR_URL_ACCESS_DENIED:
-        msg = 'Access denied to URL: %s' % url.url
+        msg = f'Access denied to URL: {url.url}'
     elif exit_code == ERROR_WORKER_EXCEPTION:
         msg = 'Download failed'
     elif exit_code == ERROR_VERIFY_FAILED:
-        msg = 'Verification failed for URL %s, local file %s'\
-              % (url.url, url.local)
+        msg = f'Verification failed for URL {url.url}, local file {url.local}'
     elif exit_code == ERROR_LOCAL_FILE_NOT_FOUND:
-        msg = 'Local file not found: %s' % url
+        msg = f'Local file not found: {url}'
     else:
         msg = 'Unknown error'
     print('s3op failed:\n%s' % msg, file=sys.stderr)
@@ -404,19 +403,17 @@ def exit(exit_code, url):
 def verify_results(urls, verbose=False):
     for url, expected in urls:
         if verbose:
-            print('verifying %s, expected %s' % (url, expected),
-                  file=sys.stderr)
+            print(f'verifying {url}, expected {expected}', file=sys.stderr)
         try:
             got = os.stat(url.local).st_size
         except OSError:
             raise
-            exit(ERROR_VERIFY_FAILED, url)
         if expected != got:
             exit(ERROR_VERIFY_FAILED, url)
         if url.content_type or url.metadata:
             # Verify that we also have a metadata file present
             try:
-                os.stat('%s_meta' % url.local)
+                os.stat(f'{url.local}_meta')
             except OSError:
                 exit(ERROR_VERIFY_FAILED, url)
 
@@ -445,20 +442,19 @@ def parallel_op(op, lst, num_workers):
     # that we need to return a value, which would require a
     # bit more work - something to consider if this turns out
     # to be a bottleneck.
-    if lst:
-        num = min(len(lst), num_workers)
-        batch_size = math.ceil(len(lst) / float(num))
-        batches = []
-        it = iter(lst)
-        while True:
-            batch = list(islice(it, batch_size))
-            if batch:
-                batches.append(batch)
-            else:
-                break
-        it = parallel_map(op, batches, max_parallel=num)
-        for x in chain.from_iterable(it):
-            yield x
+    if not lst:
+        return
+    num = min(len(lst), num_workers)
+    batch_size = math.ceil(len(lst) / float(num))
+    batches = []
+    it = iter(lst)
+    while True:
+        if batch := list(islice(it, batch_size)):
+            batches.append(batch)
+        else:
+            break
+    it = parallel_map(op, batches, max_parallel=num)
+    yield from chain.from_iterable(it)
 
 # CLI
 
@@ -585,10 +581,7 @@ def put(files=None,
 def _populate_prefixes(prefixes, inputs):
     # Returns a tuple: first element is the prefix and second element
     # is the optional range (or None if the entire prefix is requested)
-    if prefixes:
-        prefixes = [(url_unquote(p), None) for p in prefixes]
-    else:
-        prefixes = []
+    prefixes = [(url_unquote(p), None) for p in prefixes] if prefixes else []
     if inputs:
         with open(inputs, mode='rb') as f:
             for l in f:
@@ -659,13 +652,8 @@ def get(prefixes,
         if not recursive and not src.path:
             exit(ERROR_NOT_FULL_PATH, url)
         urllist.append(url)
-    # Construct a url->size mapping and get content-type and metadata if needed
-    op = None
-    dl_op = 'download'
-    if recursive:
-        op = op_list_prefix
-    if verify or verbose or info:
-        dl_op = 'info_download'
+    op = op_list_prefix if recursive else None
+    dl_op = 'info_download' if verify or verbose or info else 'download'
     if op:
         urls = []
         # NOTE - we must retain the order of prefixes requested
@@ -706,8 +694,8 @@ def get(prefixes,
         verify_results([(url, sz) for url, sz in zip(to_load, sz_results)
                         if sz != -ERROR_URL_NOT_FOUND], verbose=verbose)
 
-    idx_in_sz = 0
     if listing:
+        idx_in_sz = 0
         for url, _ in urls:
             sz = None
             if idx_in_sz != len(to_load) and url.url == to_load[idx_in_sz].url:

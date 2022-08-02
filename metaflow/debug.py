@@ -21,22 +21,19 @@ class Debug(object):
     def __init__(self):
         import metaflow.metaflow_config as config
         for typ in config.DEBUG_OPTIONS:
-            if getattr(config, 'METAFLOW_DEBUG_%s' % typ.upper()):
+            if getattr(config, f'METAFLOW_DEBUG_{typ.upper()}'):
                 op = partial(self.log, typ)
             else:
                 op = self.noop
             # use debug.$type_exec(args) to log command line for subprocesses
             # of type $type
-            setattr(self, '%s_exec' % typ, op)
+            setattr(self, f'{typ}_exec', op)
             # use the debug.$type flag to check if logging is enabled for $type
             setattr(self, typ, op != self.noop)
 
     def log(self, typ, args):
-        if is_stringish(args):
-            s = args
-        else:
-            s = ' '.join(args)
-        print('debug[%s]: %s' % (typ, s), file=sys.stderr)
+        s = args if is_stringish(args) else ' '.join(args)
+        print(f'debug[{typ}]: {s}', file=sys.stderr)
 
     def noop(self, args):
         pass

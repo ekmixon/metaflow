@@ -63,8 +63,7 @@ class S3Tail(object):
             return None
         code = str(resp['ResponseMetadata']['HTTPStatusCode'])
         if code[0] == '2':
-            data = resp['Body'].read()
-            if data:
+            if data := resp['Body'].read():
                 buf = BytesIO(self._tail + data)
                 self._pos += len(data)
                 self._tail = b''
@@ -74,5 +73,5 @@ class S3Tail(object):
         elif code[0] == '5':
             return None
         else:
-            raise Exception('Retrieving %s/%s failed: %s' % (self._bucket, self._key, code))
+            raise Exception(f'Retrieving {self._bucket}/{self._key} failed: {code}')
 

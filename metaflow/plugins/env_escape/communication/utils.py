@@ -27,13 +27,11 @@ def __try_op__(op_name, op, retries, *args):
         If all retries are exhausted, socket.timeout is raised
 
     """
-    for i in range(retries):
+    for _ in range(retries):
         try:
-            result = op(*args)
-            return result
+            return op(*args)
         except socket.timeout:
             pass
-    else:
-        raise socket.timeout(
-            "Timeout after {} retries on operation " "'{}'".format(retries, op_name)
-        )
+    raise socket.timeout(
+        f"Timeout after {retries} retries on operation '{op_name}'"
+    )

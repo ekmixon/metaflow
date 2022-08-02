@@ -29,15 +29,11 @@ class S3Storage(DataStoreStorage):
 
     def is_file(self, paths):
         with S3(s3root=self.datastore_root,
-                tmproot=os.getcwd(), external_client=self.s3_client) as s3:
-            if len(paths) > 10:
-                s3objs = s3.info_many(paths, return_missing=True)
-                return [s3obj.exists for s3obj in s3objs]
-            else:
-                result = []
-                for path in paths:
-                    result.append(s3.info(path, return_missing=True).exists)
-                return result
+                    tmproot=os.getcwd(), external_client=self.s3_client) as s3:
+            if len(paths) <= 10:
+                return [s3.info(path, return_missing=True).exists for path in paths]
+            s3objs = s3.info_many(paths, return_missing=True)
+            return [s3obj.exists for s3obj in s3objs]
 
     def info_file(self, path):
         with S3(s3root=self.datastore_root,

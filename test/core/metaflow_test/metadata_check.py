@@ -15,14 +15,13 @@ class MetadataCheck(MetaflowCheck):
 
     def _test_namespace(self):
         from metaflow.client import Flow,\
-                                    get_namespace,\
-                                    namespace,\
-                                    default_namespace
+                                        get_namespace,\
+                                        namespace,\
+                                        default_namespace
         from metaflow.exception import MetaflowNamespaceMismatch
         import os
         # test 1) METAFLOW_USER should be the default
-        assert_equals('user:%s' % os.environ.get('METAFLOW_USER'),
-                      get_namespace())
+        assert_equals(f"user:{os.environ.get('METAFLOW_USER')}", get_namespace())
         # test 2) Run should be in the listing
         assert_equals(True,
                       self.run_id in [run.id for run in Flow(self.flow.name)])
@@ -43,31 +42,27 @@ class MetadataCheck(MetaflowCheck):
 
     def assert_artifact(self, step, name, value, fields=None):
         for task, artifacts in self.artifact_dict(step, name).items():
-            if name in artifacts:
-                artifact = artifacts[name]
-                if fields:
-                    for field, v in fields.items():
-                        if is_stringish(artifact):
-                            data = json.loads(artifact)
-                        else:
-                            data = artifact
-                        if not isinstance(data, dict):
-                            raise AssertArtifactFailed(
-                                "Task '%s' expected %s to be a dictionary (got %s)" %
-                                (task, name, type(data)))
-                        if data.get(field, None) != v:
-                            raise AssertArtifactFailed(
-                                "Task '%s' expected %s[%s]=%r but got %s[%s]=%s" %
-                                (task, name, field, truncate(value), name, field,
-                                    truncate(data[field])))
-                elif artifact != value:
-                    raise AssertArtifactFailed(
-                        "Task '%s' expected %s=%r but got %s=%s" %
-                        (task, name, truncate(value), name, truncate(artifact)))
-            else:
+            if name not in artifacts:
                 raise AssertArtifactFailed("Task '%s' expected %s=%s but "
                                            "the key was not found" %\
-                                            (task, name, truncate(value)))
+                                                (task, name, truncate(value)))
+            artifact = artifacts[name]
+            if fields:
+                for field, v in fields.items():
+                    data = json.loads(artifact) if is_stringish(artifact) else artifact
+                    if not isinstance(data, dict):
+                        raise AssertArtifactFailed(
+                            "Task '%s' expected %s to be a dictionary (got %s)" %
+                            (task, name, type(data)))
+                    if data.get(field, None) != v:
+                        raise AssertArtifactFailed(
+                            "Task '%s' expected %s[%s]=%r but got %s[%s]=%s" %
+                            (task, name, field, truncate(value), name, field,
+                                truncate(data[field])))
+            elif artifact != value:
+                raise AssertArtifactFailed(
+                    "Task '%s' expected %s=%r but got %s=%s" %
+                    (task, name, truncate(value), name, truncate(artifact)))
         return True
 
     def artifact_dict(self, step, name):
@@ -75,13 +70,11 @@ class MetadataCheck(MetaflowCheck):
 
     def assert_log(self, step, logtype, value, exact_match=True):
         log_value = self.get_log(step, logtype)
-        if log_value == value:
-            return True
-        elif not exact_match and value in log_value:
+        if log_value == value or not exact_match and value in log_value:
             return True
         else:
             raise AssertLogFailed("Step '%s' expected task.%s='%s' but got task.%s='%s'" %\
-                                  (step,
+                                      (step,
                                    logtype,
                                    repr(value),
                                    logtype,

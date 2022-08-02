@@ -10,17 +10,16 @@ class FlowFormatter(object):
         self.test = test
         self.should_resume = getattr(test, 'RESUME', False)
         self.should_fail = getattr(test, 'SHOULD_FAIL', False)
-        self.flow_name = '%sFlow' % self.test.__class__.__name__
+        self.flow_name = f'{self.test.__class__.__name__}Flow'
         self.used = set()
         self._code_cache = {}
         self.steps = self._index_steps(test)
         self.flow_code = self._pretty_print(self._flow_lines())
         self.check_code = self._pretty_print(self._check_lines())
 
-        self.valid = True
-        for step in self.steps:
-            if step.required and not step in self.used:
-                self.valid = False
+        self.valid = not any(
+            step.required and step not in self.used for step in self.steps
+        )
 
     def _format_method(self, step):
 
@@ -81,23 +80,23 @@ class FlowFormatter(object):
         yield 0, '# -*- coding: utf-8 -*-'
         yield 0, 'from metaflow import FlowSpec, step, Parameter, project, IncludeFile, JSONType, current'
         yield 0, 'from metaflow_test import assert_equals, '\
-                                           'assert_exception, '\
-                                           'ExpectationFailed, '\
-                                           'is_resumed, '\
-                                           'ResumeFromHere, '\
-                                           'TestRetry'
+                                               'assert_exception, '\
+                                               'ExpectationFailed, '\
+                                               'is_resumed, '\
+                                               'ResumeFromHere, '\
+                                               'TestRetry'
         if tags:
-            yield 0, 'from metaflow import %s' % ','.join(tags)
+            yield (0, f"from metaflow import {','.join(tags)}")
 
         yield 0, self.test.HEADER
-        yield 0, 'class %s(FlowSpec):' % self.flow_name
+        yield (0, f'class {self.flow_name}(FlowSpec):')
 
         for var, parameter in self.test.PARAMETERS.items():
-            kwargs = ['%s=%s' % (k, v) for k, v in parameter.items()]
+            kwargs = [f'{k}={v}' for k, v in parameter.items()]
             yield 1, '%s = Parameter("%s", %s)' % (var, var, ','.join(kwargs))
 
         for var, include in self.test.INCLUDE_FILES.items():
-            kwargs = ['%s=%s' % (k, v) for k, v in include.items()]
+            kwargs = [f'{k}={v}' for k, v in include.items()]
             yield 1, '%s = IncludeFile("%s", %s)' % (var, var, ','.join(kwargs))
 
         for name, node in self.graphspec['graph'].items():
@@ -105,45 +104,44 @@ class FlowFormatter(object):
             self.used.add(step)
 
             for tagspec in step.tags:
-                yield 1, '@%s' % tagspec
+                yield (1, f'@{tagspec}')
             yield 1, '@step'
 
             if 'join' in node:
-                yield 1, 'def %s(self, inputs):' % name
+                yield (1, f'def {name}(self, inputs):')
             else:
-                yield 1, 'def %s(self):' % name
+                yield (1, f'def {name}(self):')
 
             if 'foreach' in node:
-                yield 2, 'self.%s = %s' % (node['foreach_var'],
-                                           node['foreach_var_default'])
+                yield (2, f"self.{node['foreach_var']} = {node['foreach_var_default']}")
 
             for line in self._format_method(step):
                 yield 2, line
 
             if 'linear' in node:
-                yield 2, 'self.next(self.%s)' % node['linear']
+                yield (2, f"self.next(self.{node['linear']})")
             elif 'branch' in node:
-                branches = ','.join('self.%s' % x for x in node['branch'])
-                yield 2, 'self.next(%s)' % branches
+                branches = ','.join(f'self.{x}' for x in node['branch'])
+                yield (2, f'self.next({branches})')
             elif 'foreach' in node:
                 yield 2, 'self.next(self.%s, foreach="%s")' %\
-                         (node['foreach'], node['foreach_var'])
+                             (node['foreach'], node['foreach_var'])
 
         yield 0, "if __name__ == '__main__':"
-        yield 1, '%s()' % self.flow_name
+        yield (1, f'{self.flow_name}()')
 
     def _check_lines(self):
         yield 0, '# -*- coding: utf-8 -*-'
         yield 0, 'from coverage import Coverage'
         yield 0, 'cov = Coverage(data_suffix=True, '\
-                                'auto_data=True, '\
-                                'branch=True, '\
-                                'omit=["check_flow.py", '\
-                                      '"test_flow.py", '\
-                                      '"*/click/*", '\
-                                      '"*/site-packages/*", '\
-                                      '"*/core/metaflow_extensions/*", '\
-                                      '"*/core/metaflow_test/*"])'
+                                    'auto_data=True, '\
+                                    'branch=True, '\
+                                    'omit=["check_flow.py", '\
+                                          '"test_flow.py", '\
+                                          '"*/click/*", '\
+                                          '"*/site-packages/*", '\
+                                          '"*/core/metaflow_extensions/*", '\
+                                          '"*/core/metaflow_test/*"])'
         yield 0, 'cov.start()'
         yield 0, 'import sys'
         yield 0, 'from metaflow_test import assert_equals, new_checker'
@@ -151,8 +149,8 @@ class FlowFormatter(object):
         for line in self._format_method(self.test.check_results):
             yield 1, line
         yield 0, "if __name__ == '__main__':"
-        yield 1, 'from test_flow import %s' % self.flow_name
-        yield 1, 'flow = %s(use_cli=False)' % self.flow_name
+        yield (1, f'from test_flow import {self.flow_name}')
+        yield (1, f'flow = {self.flow_name}(use_cli=False)')
         yield 1, 'check = new_checker(flow)'
         yield 1, 'check_results(flow, check)'
 

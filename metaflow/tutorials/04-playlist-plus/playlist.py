@@ -60,7 +60,7 @@ class PlayListFlow(FlowSpec):
         from metaflow import Flow, get_metadata
 
         # Print metadata provider
-        print("Using metadata provider: %s" % get_metadata())
+        print(f"Using metadata provider: {get_metadata()}")
 
         # Load the analysis from the MovieStatsFlow.
         run = Flow('MovieStatsFlow').latest_successful_run

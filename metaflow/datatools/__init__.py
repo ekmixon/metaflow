@@ -26,35 +26,36 @@ from .s3 import MetaflowS3Exception, S3
 try:
     import metaflow_extensions.datatools as extension_module
 except ImportError as e:
-    if ver >= 36:
-        # e.name is set to the name of the package that fails to load
-        # so don't error ONLY IF the error is importing this module (but do
-        # error if there is a transitive import error)
-        if not (isinstance(e, ModuleNotFoundError) and \
-                e.name in ['metaflow_extensions', 'metaflow_extensions.datatools']):
-            print(
-                "Cannot load metaflow_extensions exceptions -- "
-                "if you want to ignore, uninstall metaflow_extensions package")
-            raise
+    if ver >= 36 and not (
+        isinstance(e, ModuleNotFoundError)
+        and e.name in ['metaflow_extensions', 'metaflow_extensions.datatools']
+    ):
+        print(
+            "Cannot load metaflow_extensions exceptions -- "
+            "if you want to ignore, uninstall metaflow_extensions package")
+        raise
 else:
     # We load into globals whatever we have in extension_module
     # We specifically exclude any modules that may be included (like sys, os, etc)
     # *except* for ones that are part of metaflow_extensions (basically providing
     # an aliasing mechanism)
     lazy_load_custom_modules = {}
-    addl_modules = extension_module.__dict__.get('__mf_promote_submodules__')
-    if addl_modules:
+    if addl_modules := extension_module.__dict__.get(
+        '__mf_promote_submodules__'
+    ):
         # We make an alias for these modules which the metaflow_extensions author
         # wants to expose but that may not be loaded yet
         lazy_load_custom_modules = {
-            'metaflow.datatools.%s' % k: 'metaflow_extensions.datatools.%s' % k
-            for k in addl_modules}
+            f'metaflow.datatools.{k}': f'metaflow_extensions.datatools.{k}'
+            for k in addl_modules
+        }
+
     for n, o in extension_module.__dict__.items():
         if not n.startswith('__') and not isinstance(o, types.ModuleType):
             globals()[n] = o
         elif isinstance(o, types.ModuleType) and o.__package__ and \
                 o.__package__.startswith('metaflow_extensions'):
-            lazy_load_custom_modules['metaflow.datatools.%s' % n] = o
+            lazy_load_custom_modules[f'metaflow.datatools.{n}'] = o
     if lazy_load_custom_modules:
         from metaflow import _LazyLoader
         sys.meta_path = [_LazyLoader(lazy_load_custom_modules)] + sys.meta_path

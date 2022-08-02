@@ -46,7 +46,7 @@ class ServiceMetadataProvider(MetadataProvider):
             resp = requests.get(os.path.join(v, 'ping'), headers=METADATA_SERVICE_HEADERS)
             resp.raise_for_status()
         except:  # noqa E722
-            raise ValueError('Metaflow service [%s] unreachable.' % v)
+            raise ValueError(f'Metaflow service [{v}] unreachable.')
         return v
 
     @classmethod
@@ -100,7 +100,7 @@ class ServiceMetadataProvider(MetadataProvider):
             raise Exception("heartbeat already started")
         # start sidecar
         if self.version() is None or \
-                LooseVersion(self.version()) < LooseVersion('2.0.4'):
+                    LooseVersion(self.version()) < LooseVersion('2.0.4'):
             # if old version of the service is running
             # then avoid running real heartbeat sidecar process
             self.sidecar_process = SidecarSubProcess("nullSidecarHeartbeat")
@@ -167,7 +167,7 @@ class ServiceMetadataProvider(MetadataProvider):
             if cls._supports_attempt_gets is None:
                 version = cls._version(None)
                 cls._supports_attempt_gets = version is not None and \
-                    LooseVersion(version) >= LooseVersion('2.0.6')
+                        LooseVersion(version) >= LooseVersion('2.0.6')
             if not cls._supports_attempt_gets:
                 raise ServiceException(
                     "Getting specific attempts of Tasks or Artifacts requires "
@@ -196,9 +196,9 @@ class ServiceMetadataProvider(MetadataProvider):
         if sub_type == 'metadata':
             url += '/metadata'
         elif sub_type == 'artifact' and obj_type == 'task' and attempt is not None:
-            url += '/attempt/%s/artifacts' % attempt
+            url += f'/attempt/{attempt}/artifacts'
         else:
-            url += '/%ss' % sub_type
+            url += f'/{sub_type}s'
         try:
             return MetadataProvider._apply_filter(cls._request(None, url), filters)
         except ServiceException as ex:
@@ -229,30 +229,28 @@ class ServiceMetadataProvider(MetadataProvider):
     def _obj_path(
             flow_name, run_id=None, step_name=None, task_id=None,
             artifact_name=None, attempt=None):
-        object_path = '/flows/%s' % flow_name
+        object_path = f'/flows/{flow_name}'
         if run_id is not None:
-            object_path += '/runs/%s' % run_id
+            object_path += f'/runs/{run_id}'
         if step_name is not None:
-            object_path += '/steps/%s' % step_name
+            object_path += f'/steps/{step_name}'
         if task_id is not None:
-            object_path += '/tasks/%s' % task_id
+            object_path += f'/tasks/{task_id}'
         if artifact_name is not None:
-            object_path += '/artifacts/%s' % artifact_name
+            object_path += f'/artifacts/{artifact_name}'
         if attempt is not None:
-            object_path += '/attempt/%s' % attempt
+            object_path += f'/attempt/{attempt}'
         return object_path
 
     @staticmethod
     def _create_path(obj_type, flow_name, run_id=None, step_name=None):
-        create_path = '/flows/%s' % flow_name
+        create_path = f'/flows/{flow_name}'
         if obj_type == 'flow':
             return create_path
         if obj_type == 'run':
-            return create_path + '/run'
-        create_path += '/runs/%s/steps/%s' % (run_id, step_name)
-        if obj_type == 'step':
-            return create_path + '/step'
-        return create_path + '/task'
+            return f'{create_path}/run'
+        create_path += f'/runs/{run_id}/steps/{step_name}'
+        return f'{create_path}/step' if obj_type == 'step' else f'{create_path}/task'
 
     def _get_or_create(
             self, obj_type, run_id=None, step_name=None, task_id=None, tags=None, sys_tags=None):
@@ -304,20 +302,18 @@ class ServiceMetadataProvider(MetadataProvider):
                             resp = requests.get(url, headers=METADATA_SERVICE_HEADERS)
                     else:
                         resp = requests.get(url, headers=METADATA_SERVICE_HEADERS)
-                else:
-                    if monitor:
-                        with monitor.measure('metaflow.service_metadata.post'):
-                            resp = requests.post(url, headers=METADATA_SERVICE_HEADERS, json=data)
-                    else:
+                elif monitor:
+                    with monitor.measure('metaflow.service_metadata.post'):
                         resp = requests.post(url, headers=METADATA_SERVICE_HEADERS, json=data)
+                else:
+                    resp = requests.post(url, headers=METADATA_SERVICE_HEADERS, json=data)
             except:  # noqa E722
                 if monitor:
                     with monitor.count('metaflow.service_metadata.failed_request'):
                         if i == METADATA_SERVICE_NUM_RETRIES - 1:
                             raise
-                else:
-                    if i == METADATA_SERVICE_NUM_RETRIES - 1:
-                        raise
+                elif i == METADATA_SERVICE_NUM_RETRIES - 1:
+                    raise
                 resp = None
             else:
                 if resp.status_code < 300:
@@ -336,19 +332,23 @@ class ServiceMetadataProvider(MetadataProvider):
                     else:
                         return
                 elif resp.status_code != 503:
-                    raise ServiceException('Metadata request (%s) failed (code %s): %s'
-                                           % (path, resp.status_code, resp.text),
-                                           resp.status_code,
-                                           resp.text)
+                    raise ServiceException(
+                        f'Metadata request ({path}) failed (code {resp.status_code}): {resp.text}',
+                        resp.status_code,
+                        resp.text,
+                    )
+
             time.sleep(2**i)
 
         if resp:
-            raise ServiceException('Metadata request (%s) failed (code %s): %s'
-                                   % (path, resp.status_code, resp.text),
-                                   resp.status_code,
-                                   resp.text)
+            raise ServiceException(
+                f'Metadata request ({path}) failed (code {resp.status_code}): {resp.text}',
+                resp.status_code,
+                resp.text,
+            )
+
         else:
-            raise ServiceException('Metadata request (%s) failed' % path)
+            raise ServiceException(f'Metadata request ({path}) failed')
 
     @classmethod
     def _version(cls, monitor):
@@ -371,9 +371,8 @@ class ServiceMetadataProvider(MetadataProvider):
                         'metaflow.service_metadata.failed_request'):
                         if i == METADATA_SERVICE_NUM_RETRIES - 1:
                             raise
-                else:
-                    if i == METADATA_SERVICE_NUM_RETRIES - 1:
-                        raise
+                elif i == METADATA_SERVICE_NUM_RETRIES - 1:
+                    raise
                 resp = None
             else:
                 if resp.status_code < 300:
@@ -386,9 +385,11 @@ class ServiceMetadataProvider(MetadataProvider):
                                            resp.text)
             time.sleep(2**i)
         if resp:
-            raise ServiceException('Metadata request (%s) failed (code %s): %s'
-                                   % (url, resp.status_code, resp.text),
-                                   resp.status_code,
-                                   resp.text)
+            raise ServiceException(
+                f'Metadata request ({url}) failed (code {resp.status_code}): {resp.text}',
+                resp.status_code,
+                resp.text,
+            )
+
         else:
-            raise ServiceException('Metadata request (%s) failed' % url)
+            raise ServiceException(f'Metadata request ({url}) failed')

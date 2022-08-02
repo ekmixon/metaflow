@@ -66,7 +66,7 @@ class CLIArgs(object):
                 k = k.replace('_', '-')
                 v = v if isinstance(v, (list, tuple, set)) else [v]
                 for value in v:
-                    yield '--%s' % k
+                    yield f'--{k}'
                     if not isinstance(value, bool):
                         yield to_unicode(value)
 

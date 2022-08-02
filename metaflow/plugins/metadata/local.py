@@ -21,7 +21,8 @@ class LocalMetadataProvider(MetadataProvider):
             LocalStorage.datastore_root = v
             return val
         raise ValueError(
-            'Could not find directory %s in directory %s' % (DATASTORE_LOCAL_DIR, val))
+            f'Could not find directory {DATASTORE_LOCAL_DIR} in directory {val}'
+        )
 
     @classmethod
     def default_info(cls):
@@ -29,9 +30,10 @@ class LocalMetadataProvider(MetadataProvider):
 
         def print_clean(line, **kwargs):
             print(line)
+
         v = LocalStorage.get_datastore_root_from_config(print_clean, create_on_absent=False)
         if v is None:
-            return '<No %s directory found in current working tree>' % DATASTORE_LOCAL_DIR
+            return f'<No {DATASTORE_LOCAL_DIR} directory found in current working tree>'
         return os.path.dirname(v)
 
     def version(self):
@@ -127,30 +129,30 @@ class LocalMetadataProvider(MetadataProvider):
             successful_attempt = attempt
             if successful_attempt is None:
                 attempt_done_files = os.path.join(meta_path, 'sysmeta_attempt-done_*')
-                attempts_done = sorted(glob.iglob(attempt_done_files))
-                if attempts_done:
+                if attempts_done := sorted(glob.iglob(attempt_done_files)):
                     successful_attempt = int(LocalMetadataProvider._read_json_file(
                         attempts_done[-1])['value'])
             if successful_attempt is not None:
-                which_artifact = '*'
-                if len(args) >= sub_order:
-                    which_artifact = args[sub_order - 1]
+                which_artifact = args[sub_order - 1] if len(args) >= sub_order else '*'
                 artifact_files = os.path.join(
                     meta_path, '%d_artifact_%s.json' % (successful_attempt, which_artifact))
-                for obj in glob.iglob(artifact_files):
-                    result.append(LocalMetadataProvider._read_json_file(obj))
-            if len(result) == 1:
-                return result[0]
-            return result
+                result.extend(
+                    LocalMetadataProvider._read_json_file(obj)
+                    for obj in glob.iglob(artifact_files)
+                )
 
+            return result[0] if len(result) == 1 else result
         if sub_type == 'metadata':
             result = []
             meta_path = LocalMetadataProvider._get_metadir(*args[:obj_order])
             if meta_path is None:
                 return result
             files = os.path.join(meta_path, 'sysmeta_*')
-            for obj in glob.iglob(files):
-                result.append(LocalMetadataProvider._read_json_file(obj))
+            result.extend(
+                LocalMetadataProvider._read_json_file(obj)
+                for obj in glob.iglob(files)
+            )
+
             return result
 
         # For the other types, we locate all the objects we need to find and return them
@@ -255,18 +257,16 @@ class LocalMetadataProvider(MetadataProvider):
         if root_path is None:
             return None
         subpath = os.path.join(root_path, LocalStorage.METADATA_DIR)
-        if os.path.isdir(subpath):
-            return subpath
-        return None
+        return subpath if os.path.isdir(subpath) else None
 
     @staticmethod
     def _dump_json_to_file(
             filepath, data, allow_overwrite=False):
         if os.path.isfile(filepath) and not allow_overwrite:
             return
-        with open(filepath + '.tmp', 'w') as f:
+        with open(f'{filepath}.tmp', 'w') as f:
             json.dump(data, f)
-        os.rename(filepath + '.tmp', filepath)
+        os.rename(f'{filepath}.tmp', filepath)
 
     @staticmethod
     def _read_json_file(filepath):
@@ -276,5 +276,5 @@ class LocalMetadataProvider(MetadataProvider):
     @staticmethod
     def _save_meta(root_dir, metadict):
         for name, datum in metadict.items():
-            filename = os.path.join(root_dir, '%s.json' % name)
+            filename = os.path.join(root_dir, f'{name}.json')
             LocalMetadataProvider._dump_json_to_file(filename, datum)

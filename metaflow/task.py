@@ -83,15 +83,15 @@ class MetaflowTask(object):
                 # Prefetch 'foreach' related artifacts to improve time taken by
                 # _init_foreach.
                 prefetch_data_artifacts = \
-                    ['_foreach_stack', '_foreach_num_splits', '_foreach_var']
+                        ['_foreach_stack', '_foreach_num_splits', '_foreach_var']
             # Note: Specify `pathspecs` while creating the datastore set to
             # guarantee strong consistency and guard against missing input.
             datastore_set = \
-                TaskDataStoreSet(self.flow_datastore,
+                    TaskDataStoreSet(self.flow_datastore,
                                      run_id,
                                      pathspecs=input_paths,
                                      prefetch_data_artifacts=prefetch_data_artifacts)
-            ds_list = [ds for ds in datastore_set]
+            ds_list = list(datastore_set)
             if len(ds_list) != len(input_paths):
                 raise MetaflowDataMissing("Some input datastores are missing. "
                                           "Expected: %d Actual: %d" %
@@ -226,16 +226,16 @@ class MetaflowTask(object):
             mapper_tasks = self.flow._control_mapper_tasks
             if not mapper_tasks:
                 msg = "Step *{step}* has a control task which didn't "\
-                      "specify the artifact *_control_mapper_tasks* for "\
-                      "the subsequent *{join}* step."
+                          "specify the artifact *_control_mapper_tasks* for "\
+                          "the subsequent *{join}* step."
                 raise MetaflowInternalError(msg.format(step=step_name,
                                                        join=next_steps[0]))
             elif not (isinstance(mapper_tasks, list) and\
-                      isinstance(mapper_tasks[0], unicode_type)):
+                          isinstance(mapper_tasks[0], unicode_type)):
                 msg = "Step *{step}* has a control task which didn't "\
-                      "specify the artifact *_control_mapper_tasks* as a "\
-                      "list of strings but instead specified it as {typ} "\
-                      "with elements of {elem_typ}."
+                          "specify the artifact *_control_mapper_tasks* as a "\
+                          "list of strings but instead specified it as {typ} "\
+                          "with elements of {elem_typ}."
                 raise MetaflowInternalError(msg.format(step=step_name,
                                                        typ=type(mapper_tasks),
                                                        elem_typ=type(mapper_tasks[0])))

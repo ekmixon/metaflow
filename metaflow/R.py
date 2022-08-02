@@ -19,19 +19,20 @@ def get_r_func(func_name):
     return R_FUNCTIONS[func_name]
 
 def package_paths():
-    if R_PACKAGE_PATHS is not None:
-        root = R_PACKAGE_PATHS['package']
-        prefixlen = len('%s/' % root.rstrip('/'))
-        for path, dirs, files in os.walk(R_PACKAGE_PATHS['package']):
-            if '/.' in path:
+    if R_PACKAGE_PATHS is None:
+        return
+    root = R_PACKAGE_PATHS['package']
+    prefixlen = len(f"{root.rstrip('/')}/")
+    for path, dirs, files in os.walk(R_PACKAGE_PATHS['package']):
+        if '/.' in path:
+            continue
+        for fname in files:
+            if fname[0] == '.':
                 continue
-            for fname in files:
-                if fname[0] == '.':
-                    continue
-                p = os.path.join(path, fname)
-                yield p, os.path.join('metaflow-r', p[prefixlen:])
-        flow = R_PACKAGE_PATHS['flow']
-        yield flow, os.path.basename(flow)
+            p = os.path.join(path, fname)
+            yield p, os.path.join('metaflow-r', p[prefixlen:])
+    flow = R_PACKAGE_PATHS['flow']
+    yield flow, os.path.basename(flow)
 
 def entrypoint():
     return 'PYTHONPATH=/root/metaflow R_LIBS_SITE=`Rscript -e \'cat(paste(.libPaths(), collapse=\\":\\"))\'`:metaflow/ Rscript metaflow-r/run_batch.R --flowRDS=%s' % RDS_FILE_PATH
@@ -52,9 +53,7 @@ def r_version_code():
     return R_VERSION_CODE
 
 def working_dir():
-    if use_r(): 
-        return R_PACKAGE_PATHS['wd']
-    return None
+    return R_PACKAGE_PATHS['wd'] if use_r() else None
 
 def run(flow_script,
         r_functions,

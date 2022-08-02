@@ -125,15 +125,14 @@ class FlowSpec(object):
         return iter(self._steps)
 
     def __getattr__(self, name):
-        if self._datastore and name in self._datastore:
-            # load the attribute from the datastore...
-            x = self._datastore[name]
-            # ...and cache it in the object for faster access
-            setattr(self, name, x)
-            return x
-        else:
+        if not self._datastore or name not in self._datastore:
             raise AttributeError("Flow %s has no attribute '%s'" %
                                  (self.name, name))
+        # load the attribute from the datastore...
+        x = self._datastore[name]
+        # ...and cache it in the object for faster access
+        setattr(self, name, x)
+        return x
 
     def cmd(self, cmdline, input={}, output=[]):
         return cmd_with_io.cmd(cmdline,
@@ -314,7 +313,7 @@ class FlowSpec(object):
         node = self._graph[self._current_step]
         if node.type != 'join':
             msg = "merge_artifacts can only be called in a join and step *{step}* "\
-                  "is not a join".format(step=self._current_step)
+                      "is not a join".format(step=self._current_step)
             raise MetaflowException(msg)
         if len(exclude) > 0 and len(include) > 0:
             msg = "`exclude` and `include` are mutually exclusive in merge_artifacts"
@@ -336,23 +335,20 @@ class FlowSpec(object):
                     # We have a conflict here
                     unresolved.append(var)
         # Check if everything in include is present in to_merge
-        missing = []
-        for v in include:
-            if v not in to_merge and not hasattr(self, v):
-                missing.append(v)
+        missing = [v for v in include if v not in to_merge and not hasattr(self, v)]
         if unresolved:
             # We have unresolved conflicts so we do not set anything and error out
             msg = "Step *{step}* cannot merge the following artifacts due to them "\
-                  "having conflicting values:\n[{artifacts}].\nTo remedy this issue, "\
-                  "be sure to explicitly set those artifacts (using "\
-                  "self.<artifact_name> = ...) prior to calling merge_artifacts."\
-                  .format(step=self._current_step, artifacts=', '.join(unresolved))
+                      "having conflicting values:\n[{artifacts}].\nTo remedy this issue, "\
+                      "be sure to explicitly set those artifacts (using "\
+                      "self.<artifact_name> = ...) prior to calling merge_artifacts."\
+                      .format(step=self._current_step, artifacts=', '.join(unresolved))
             raise UnhandledInMergeArtifactsException(msg, unresolved)
         if missing:
             msg = "Step *{step}* specifies that [{include}] should be merged but "\
-                  "[{missing}] are not present.\nTo remedy this issue, make sure "\
-                  "that the values specified in only come from at least one branch"\
-                  .format(
+                      "[{missing}] are not present.\nTo remedy this issue, make sure "\
+                      "that the values specified in only come from at least one branch"\
+                      .format(
                       step=self._current_step,
                       include=', '.join(include),
                       missing=', '.join(missing))
@@ -412,13 +408,13 @@ class FlowSpec(object):
         if kwargs:
             kw = next(iter(kwargs))
             msg = "Step *{step}* passes an unknown keyword argument "\
-                  "'{invalid}' to self.next().".format(step=step, invalid=kw)
+                      "'{invalid}' to self.next().".format(step=step, invalid=kw)
             raise InvalidNextException(msg)
 
         # check: next() is called only once
         if self._transition is not None:
             msg = "Multiple self.next() calls detected in step *{step}*. "\
-                  "Call self.next() only once.".format(step=step)
+                      "Call self.next() only once.".format(step=step)
             raise InvalidNextException(msg)
 
         # check: all destinations are methods of this object
@@ -428,44 +424,44 @@ class FlowSpec(object):
                 name = dst.__func__.__name__
             except:
                 msg = "In step *{step}* the {arg}. argument in self.next() is "\
-                      "not a function. Make sure all arguments in self.next() "\
-                      "are methods of the Flow class."\
-                      .format(step=step, arg=i + 1)
+                          "not a function. Make sure all arguments in self.next() "\
+                          "are methods of the Flow class."\
+                          .format(step=step, arg=i + 1)
                 raise InvalidNextException(msg)
             if not hasattr(self, name):
                 msg = "Step *{step}* specifies a self.next() transition to an "\
-                      "unknown step, *{name}*.".format(step=step,
+                          "unknown step, *{name}*.".format(step=step,
                                                        name=name)
                 raise InvalidNextException(msg)
             funcs.append(name)
 
         # check: foreach and condition are mutually exclusive
-        if not (foreach is None or condition is None):
+        if foreach is not None and condition is not None:
             msg = "Step *{step}* has an invalid self.next() transition. "\
-                  "Specify either 'foreach' or 'condition', not both."\
-                  .format(step=step)
+                      "Specify either 'foreach' or 'condition', not both."\
+                      .format(step=step)
             raise InvalidNextException(msg)
 
         # check: foreach is valid
         if foreach:
             if not isinstance(foreach, basestring):
                 msg = "Step *{step}* has an invalid self.next() transition. "\
-                      "The argument to 'foreach' must be a string."\
-                      .format(step=step)
+                          "The argument to 'foreach' must be a string."\
+                          .format(step=step)
                 raise InvalidNextException(msg)
 
             if len(dsts) != 1:
                 msg = "Step *{step}* has an invalid self.next() transition. "\
-                      "Specify exactly one target for 'foreach'."\
-                      .format(step=step)
+                          "Specify exactly one target for 'foreach'."\
+                          .format(step=step)
                 raise InvalidNextException(msg)
 
             try:
                 foreach_iter = getattr(self, foreach)
             except:
                 msg = "Foreach variable *self.{var}* in step *{step}* "\
-                      "does not exist. Check your variable."\
-                      .format(step=step, var=foreach)
+                          "does not exist. Check your variable."\
+                          .format(step=step, var=foreach)
                 raise InvalidNextException(msg)
 
             if issubclass(type(foreach_iter), UnboundedForeachInput):
@@ -477,14 +473,14 @@ class FlowSpec(object):
                     self._foreach_num_splits = sum(1 for _ in foreach_iter)
                 except TypeError:
                     msg = "Foreach variable *self.{var}* in step *{step}* "\
-                          "is not iterable. Check your variable."\
-                          .format(step=step, var=foreach)
+                              "is not iterable. Check your variable."\
+                              .format(step=step, var=foreach)
                     raise InvalidNextException(msg)
 
                 if self._foreach_num_splits == 0:
                     msg = "Foreach iterator over *{var}* in step *{step}* "\
-                          "produced zero splits. Check your variable."\
-                          .format(step=step, var=foreach)
+                              "produced zero splits. Check your variable."\
+                              .format(step=step, var=foreach)
                     raise InvalidNextException(msg)
 
             self._foreach_var = foreach
@@ -493,45 +489,37 @@ class FlowSpec(object):
         if condition:
             if not isinstance(condition, basestring):
                 msg = "Step *{step}* has an invalid self.next() transition. "\
-                      "The argument to 'condition' must be a string."\
-                      .format(step=step)
+                          "The argument to 'condition' must be a string."\
+                          .format(step=step)
                 raise InvalidNextException(msg)
             if len(dsts) != 2:
                 msg = "Step *{step}* has an invalid self.next() transition. "\
-                      "Specify two targets for 'condition': The first target "\
-                      "is used if the condition evaluates to true, the second "\
-                      "otherwise.".format(step=step)
+                          "Specify two targets for 'condition': The first target "\
+                          "is used if the condition evaluates to true, the second "\
+                          "otherwise.".format(step=step)
                 raise InvalidNextException(msg)
 
         # check: non-keyword transitions are valid
-        if foreach is None and condition is None:
-            if len(dsts) < 1:
-                msg = "Step *{step}* has an invalid self.next() transition. "\
+        if foreach is None and condition is None and not dsts:
+            msg = "Step *{step}* has an invalid self.next() transition. "\
                       "Specify at least one step function as an argument in "\
                       "self.next().".format(step=step)
-                raise InvalidNextException(msg)
+            raise InvalidNextException(msg)
 
         self._transition = (funcs, foreach, condition)
 
     def __str__(self):
-        step_name = getattr(self, '_current_step', None)
-        if step_name:
-            index = ','.join(str(idx) for idx, _, _ in self.foreach_stack())
-            if index:
-                inp = self.input
-                if inp is None:
-                    return '<flow %s step %s[%s]>' %\
-                           (self.name, step_name, index)
-                else:
-                    inp = str(inp)
-                    if len(inp) > 20:
-                        inp = inp[:20] + '...'
-                    return '<flow %s step %s[%s] (input: %s)>' %\
-                        (self.name, step_name, index, inp)
-            else:
-                return '<flow %s step %s>' % (self.name, step_name)
-        else:
-            return '<flow %s>' % self.name
+        if not (step_name := getattr(self, '_current_step', None)):
+            return f'<flow {self.name}>'
+        if not (index := ','.join(str(idx) for idx, _, _ in self.foreach_stack())):
+            return f'<flow {self.name} step {step_name}>'
+        inp = self.input
+        if inp is None:
+            return f'<flow {self.name} step {step_name}[{index}]>'
+        inp = str(inp)
+        if len(inp) > 20:
+            inp = f'{inp[:20]}...'
+        return f'<flow {self.name} step {step_name}[{index}] (input: {inp})>'
 
     def __getstate__(self):
         raise MetaflowException("Flows can't be serialized. Maybe you tried "

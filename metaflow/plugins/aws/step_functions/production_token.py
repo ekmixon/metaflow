@@ -35,7 +35,7 @@ def _load_config(path):
 
 def _path(token_prefix):
     home = os.environ.get('METAFLOW_HOME', '~/.metaflowconfig')
-    return os.path.expanduser('%s/%s' % (home, token_prefix))
+    return os.path.expanduser(f'{home}/{token_prefix}')
 
 def new_token(token_prefix, prev_token=None):
     if prev_token is None:
@@ -46,8 +46,7 @@ def new_token(token_prefix, prev_token=None):
                        _token_generator(token_prefix))
         for _ in it:
             return next(it)
-        else:
-            return None
+        return None
 
 def load_token(token_prefix):
     config = _load_config(_path(token_prefix))

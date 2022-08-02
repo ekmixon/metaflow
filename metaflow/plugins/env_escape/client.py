@@ -56,7 +56,7 @@ class Client(object):
         server_module = ".".join([__package__, "server"])
         self._socket_path = "/tmp/%s_%d" % (os.path.basename(config_dir), os.getpid())
         if os.path.exists(self._socket_path):
-            raise RuntimeError("Existing socket: %s" % self._socket_path)
+            raise RuntimeError(f"Existing socket: {self._socket_path}")
         env = os.environ.copy()
         #env["PYTHONPATH"] = ":".join(sys.path)
         self._server_process = Popen(
@@ -91,9 +91,7 @@ class Client(object):
                         obj_funcs = (obj_funcs,)
                     for name in obj_funcs:
                         if name in override_dict:
-                            raise ValueError(
-                                "%s was already overridden for %s" % (name, obj_name)
-                            )
+                            raise ValueError(f"{name} was already overridden for {obj_name}")
                         override_dict[name] = override.func
         self._proxied_objects = {}
 
@@ -103,9 +101,9 @@ class Client(object):
             returncode = self._server_process.poll()
             if returncode is not None:
                 raise RuntimeError(
-                    "Server did not properly start: %s"
-                    % self._server_process.stderr.read(),
+                    f"Server did not properly start: {self._server_process.stderr.read()}"
                 )
+
             time.sleep(1)
         # Open up the channel and setup the datastransfer pipeline
         self._channel = Channel(SocketByteStream.unixconnect(self._socket_path))
@@ -196,21 +194,18 @@ class Client(object):
     def stub_request(self, stub, request_type, *args, **kwargs):
         # Encode the operation to send over the wire and wait for the response
         target = self.encode(stub)
-        encoded_args = []
-        for arg in args:
-            encoded_args.append(self.encode(arg))
-        encoded_kwargs = []
-        for k, v in kwargs.items():
-            encoded_kwargs.append((self.encode(k), self.encode(v)))
+        encoded_args = [self.encode(arg) for arg in args]
+        encoded_kwargs = [(self.encode(k), self.encode(v)) for k, v in kwargs.items()]
         response = self._communicate(
             {
                 FIELD_MSGTYPE: MSG_OP,
                 FIELD_OPTYPE: request_type,
                 FIELD_TARGET: target,
                 FIELD_ARGS: self.encode(args),
-                FIELD_KWARGS: self.encode([(k, v) for k, v in kwargs.items()]),
+                FIELD_KWARGS: self.encode(list(kwargs.items())),
             }
         )
+
         response_type = response[FIELD_MSGTYPE]
         if response_type == MSG_REPLY:
             return self.decode(response[FIELD_CONTENT])
@@ -248,7 +243,9 @@ class Client(object):
                 raise RuntimeError("Local function unpickling without an object ID")
             if obj_id not in self._proxied_standalone_functions:
                 self._proxied_standalone_functions[obj_id] = create_class(
-                    self, '__function_%s' % obj_id, {}, {}, {}, {'__call__': ''})
+                    self, f'__function_{obj_id}', {}, {}, {}, {'__call__': ''}
+                )
+
             return self._proxied_standalone_functions[obj_id]
 
         if name not in self._proxied_classes:
@@ -281,14 +278,14 @@ class Client(object):
             )
 
         raise ValueError(
-            "Cannot send object of type %s from client to server" % type(obj)
+            f"Cannot send object of type {type(obj)} from client to server"
         )
 
     def unpickle_object(self, obj):
         # This function is called when the server sends a remote reference.
         # We create a local stub for it locally
         if (not isinstance(obj, ObjReference)) or obj.value_type != VALUE_REMOTE:
-            raise ValueError("Invalid transferred object: %s" % str(obj))
+            raise ValueError(f"Invalid transferred object: {str(obj)}")
         remote_class_name = obj.class_name
         obj_id = obj.identifier
         local_instance = self._proxied_objects.get(obj_id)
@@ -329,18 +326,18 @@ class Client(object):
         # this is non blocking
         while True:
             try:
-                line = self._server_process.stdout.readline()
-                if not line:
+                if line := self._server_process.stdout.readline():
+                    sys.stdout.write(line)
+                else:
                     break
-                sys.stdout.write(line)
             except (OSError, TypeError):
                 break
         while True:
             try:
-                line = self._server_process.stderr.readline()
-                if not line:
+                if line := self._server_process.stderr.readline():
+                    sys.stderr.write(line)
+                else:
                     break
-                sys.stderr.write(line)
             except (OSError, TypeError):
                 break
         sys.stdout.flush()

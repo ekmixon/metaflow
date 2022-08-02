@@ -3,41 +3,40 @@ import ast
 import re
 
 def deindent_docstring(doc):
-    if doc:
-        # Find the indent to remove from the doctring. We consider the following possibilities:
-        # Option 1:
-        #  """This is the first line
-        #    This is the second line
-        #  """
-        # Option 2:
-        #  """
-        # This is the first line
-        # This is the second line
-        # """
-        # Option 3:
-        #  """
-        #     This is the first line
-        #     This is the second line
-        #  """
-        #
-        # In all cases, we can find the indent to remove by doing the following:
-        #  - Check the first non-empty line, if it has an indent, use that as the base indent
-        #  - If it does not have an indent and there is a second line, check the indent of the
-        #    second line and use that
-        saw_first_line = False
-        matched_indent = None
-        for line in doc.splitlines():
-            if line:
-                matched_indent = re.match('[\t ]+', line)
-                if matched_indent is not None or saw_first_line:
-                    break
-                saw_first_line = True
-        if matched_indent:
-            return re.sub(r'\n' + matched_indent.group(), '\n', doc).strip()
-        else:
-            return doc
-    else:
+    if not doc:
         return ''
+    # Find the indent to remove from the doctring. We consider the following possibilities:
+    # Option 1:
+    #  """This is the first line
+    #    This is the second line
+    #  """
+    # Option 2:
+    #  """
+    # This is the first line
+    # This is the second line
+    # """
+    # Option 3:
+    #  """
+    #     This is the first line
+    #     This is the second line
+    #  """
+    #
+    # In all cases, we can find the indent to remove by doing the following:
+    #  - Check the first non-empty line, if it has an indent, use that as the base indent
+    #  - If it does not have an indent and there is a second line, check the indent of the
+    #    second line and use that
+    saw_first_line = False
+    matched_indent = None
+    for line in doc.splitlines():
+        if line:
+            matched_indent = re.match('[\t ]+', line)
+            if matched_indent is not None or saw_first_line:
+                break
+            saw_first_line = True
+    if matched_indent:
+        return re.sub(r'\n' + matched_indent.group(), '\n', doc).strip()
+    else:
+        return doc
 
 class DAGNode(object):
     def __init__(self, func_ast, decos, doc):
@@ -66,7 +65,7 @@ class DAGNode(object):
         self.is_inside_foreach = False
 
     def _expr_str(self, expr):
-        return '%s.%s' % (expr.value.id, expr.attr)
+        return f'{expr.value.id}.{expr.attr}'
 
     def _parse(self, func_ast):
 
@@ -84,14 +83,14 @@ class DAGNode(object):
 
         # determine the type of self.next transition
         try:
-            if not self._expr_str(tail.value.func) == 'self.next':
+            if self._expr_str(tail.value.func) != 'self.next':
                 return
 
             self.has_tail_next = True
             self.invalid_tail_next = True
             self.tail_next_lineno = tail.lineno
             self.out_funcs = [e.attr for e in tail.value.args]
-            keywords = dict((k.arg, k.value.s) for k in tail.value.keywords)
+            keywords = {k.arg: k.value.s for k in tail.value.keywords}
 
             if len(keywords) == 1:
                 if 'foreach' in keywords:
@@ -106,45 +105,42 @@ class DAGNode(object):
                     if len(self.out_funcs) == 2:
                         self.condition = keywords['condition']
                         self.invalid_tail_next = False
-            elif len(keywords) == 0:
+            elif not keywords:
                 if len(self.out_funcs) > 1:
                     # TYPE: split-and
                     self.type = 'split-and'
                     self.invalid_tail_next = False
                 elif len(self.out_funcs) == 1:
                     # TYPE: linear
-                    if self.num_args > 1:
-                        self.type = 'join'
-                    else:
-                        self.type = 'linear'
+                    self.type = 'join' if self.num_args > 1 else 'linear'
                     self.invalid_tail_next = False
 
         except AttributeError:
             return
 
     def __str__(self):
-        return\
-"""*[{0.name} {0.type} (line {0.func_lineno})]*
-    in_funcs={in_funcs}
-    out_funcs={out_funcs}
-    split_parents={parents}
-    matching_join={matching_join}
-    is_inside_foreach={is_inside_foreach}
-    decorators={decos}
-    num_args={0.num_args}
-    has_tail_next={0.has_tail_next} (line {0.tail_next_lineno})
-    invalid_tail_next={0.invalid_tail_next}
-    condition={0.condition}
-    foreach_param={0.foreach_param}
-    -> {out}"""\
-    .format(self,
-            matching_join=self.matching_join and '[%s]' % self.matching_join,
+        return """*[{0.name} {0.type} (line {0.func_lineno})]*
+        in_funcs={in_funcs}
+        out_funcs={out_funcs}
+        split_parents={parents}
+        matching_join={matching_join}
+        is_inside_foreach={is_inside_foreach}
+        decorators={decos}
+        num_args={0.num_args}
+        has_tail_next={0.has_tail_next} (line {0.tail_next_lineno})
+        invalid_tail_next={0.invalid_tail_next}
+        condition={0.condition}
+        foreach_param={0.foreach_param}
+        -> {out}""".format(
+            self,
+            matching_join=self.matching_join and f'[{self.matching_join}]',
             is_inside_foreach=self.is_inside_foreach,
-            out_funcs=', '.join('[%s]' % x for x in self.out_funcs),
-            in_funcs=', '.join('[%s]' % x for x in self.in_funcs),
-            parents=', '.join('[%s]' % x for x in self.split_parents),
+            out_funcs=', '.join(f'[{x}]' for x in self.out_funcs),
+            in_funcs=', '.join(f'[{x}]' for x in self.in_funcs),
+            parents=', '.join(f'[{x}]' for x in self.split_parents),
             decos=' | '.join(map(str, self.decorators)),
-            out=', '.join('[%s]' % x for x in self.out_funcs))
+            out=', '.join(f'[{x}]' for x in self.out_funcs),
+        )
 
 class StepVisitor(ast.NodeVisitor):
 
@@ -171,7 +167,7 @@ class FlowGraph(object):
         module = __import__(flow.__module__)
         tree = ast.parse(inspect.getsource(module)).body
         root = [n for n in tree\
-                if isinstance(n, ast.ClassDef) and n.name == self.name][0]
+                    if isinstance(n, ast.ClassDef) and n.name == self.name][0]
         nodes = {}
         StepVisitor(nodes, flow).visit(root)
         return nodes
@@ -205,12 +201,10 @@ class FlowGraph(object):
 
             for n in node.out_funcs:
                 # graph may contain loops - ignore them
-                if n not in seen:
-                    # graph may contain unknown transitions - ignore them
-                    if n in self:
-                        child = self[n]
-                        child.in_funcs.add(node.name)
-                        traverse(child, seen + [n], split_parents)
+                if n not in seen and n in self:
+                    child = self[n]
+                    child.in_funcs.add(node.name)
+                    traverse(child, seen + [n], split_parents)
 
         if 'start' in self:
             traverse(self['start'], [], [])
@@ -237,20 +231,20 @@ class FlowGraph(object):
         def edge_specs():
             for node in self.nodes.values():
                 for edge in node.out_funcs:
-                    yield '%s -> %s;' % (node.name, edge)
+                    yield f'{node.name} -> {edge};'
 
         def node_specs():
             for node in self.nodes.values():
                 nodetype = 'join' if node.num_args > 1 else node.type
                 yield '"{0.name}"'\
-                      '[ label = <<b>{0.name}</b> | <font point-size="10">{type}</font>> '\
-                      '  fontname = "Helvetica" '\
-                      '  shape = "record" ];'.format(node, type=nodetype)
+                          '[ label = <<b>{0.name}</b> | <font point-size="10">{type}</font>> '\
+                          '  fontname = "Helvetica" '\
+                          '  shape = "record" ];'.format(node, type=nodetype)
 
         return "digraph {0.name} {{\n"\
-               "{nodes}\n"\
-               "{edges}\n"\
-               "}}".format(self,
+                   "{nodes}\n"\
+                   "{edges}\n"\
+                   "}}".format(self,
                            nodes='\n'.join(node_specs()),
                            edges='\n'.join(edge_specs()))
 

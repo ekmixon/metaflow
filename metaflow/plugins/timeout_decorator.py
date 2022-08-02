@@ -92,11 +92,11 @@ class TimeoutDecorator(StepDecorator):
             for line in traceback.format_stack():
                 if 'timeout_decorators.py' not in line:
                     for part in line.splitlines():
-                        yield '>  %s' % part
+                        yield f'>  {part}'
 
         msg = 'Step {step_name} timed out after {hours} hours, '\
-              '{minutes} minutes, {seconds} seconds'\
-              .format(step_name=self.step_name, **self.attributes)
+                  '{minutes} minutes, {seconds} seconds'\
+                  .format(step_name=self.step_name, **self.attributes)
         self.logger(msg)
         raise TimeoutException('%s\nStack when the timeout was raised:\n%s'
                                % (msg, '\n'.join(pretty_print_stack())))

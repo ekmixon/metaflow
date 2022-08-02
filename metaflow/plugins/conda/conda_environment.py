@@ -49,21 +49,16 @@ class CondaEnvironment(MetaflowEnvironment):
 
     def _get_conda_decorator(self, step_name):
         step = next(step for step in self.flow if step.name == step_name)
-        decorator = next(deco for deco in step.decorators if deco.name == 'conda')
         # Guaranteed to have a conda decorator because of self.decospecs()
-        return decorator
+        return next(deco for deco in step.decorators if deco.name == 'conda')
 
     def _get_env_id(self, step_name):
         conda_decorator = self._get_conda_decorator(step_name)
-        if conda_decorator.is_enabled():
-            return conda_decorator._env_id()
-        return None
+        return conda_decorator._env_id() if conda_decorator.is_enabled() else None
 
     def _get_executable(self, step_name):
         env_id = self._get_env_id(step_name)
-        if env_id is not None:
-            return (os.path.join(env_id, "bin/python -s"))
-        return None
+        return (os.path.join(env_id, "bin/python -s")) if env_id is not None else None
 
     def set_local_root(self, ds_root):
         self.local_root = ds_root
@@ -75,7 +70,7 @@ class CondaEnvironment(MetaflowEnvironment):
             return [
                     "echo \'Bootstrapping environment...\'",
                     "python -m metaflow.plugins.conda.batch_bootstrap \"%s\" %s" % \
-                        (self.flow.name, env_id),
+                            (self.flow.name, env_id),
                     "echo \'Environment bootstrapped.\'",
                 ]
         return []
@@ -117,11 +112,11 @@ class CondaEnvironment(MetaflowEnvironment):
         if conda_file is None:
             return {'type': 'conda'}
         info = json.loads(conda_file.read().decode('utf-8'))
-        new_info = {
+        return {
             'type': 'conda',
             'explicit': info[env_id]['explicit'],
-            'deps': info[env_id]['deps']}
-        return new_info
+            'deps': info[env_id]['deps'],
+        }
 
     def get_package_commands(self, code_package_url):
         return self.base_env.get_package_commands(code_package_url)

@@ -25,15 +25,13 @@ class _WrappedModule(object):
         for k in ("classes", "functions", "values"):
             result = []
             for item in exports[k]:
-                m = is_match.match(item)
-                if m:
-                    result.append(m.group(1))
+                if m := is_match.match(item):
+                    result.append(m[1])
             self._exports[k] = result
         self._exception_classes = {}
         for k, v in exception_classes.items():
-            m = is_match.match(k)
-            if m:
-                self._exception_classes[m.group(1)] = v
+            if m := is_match.match(k):
+                self._exception_classes[m[1]] = v
 
     def __getattr__(self, name):
         if name == "__loader__":
@@ -44,21 +42,20 @@ class _WrappedModule(object):
             return self._client.name
         if name in self._exports["classes"]:
             # We load classes lazily
-            return self._client.get_local_class("%s.%s" % (self._prefix, name))
+            return self._client.get_local_class(f"{self._prefix}.{name}")
         elif name in self._exports["functions"]:
             # TODO: Grab doc back from the remote side like in _make_method
             def func(*args, **kwargs):
                 return self._client.stub_request(
-                    None, OP_CALLFUNC, "%s.%s" % (self._prefix, name), *args, **kwargs
+                    None, OP_CALLFUNC, f"{self._prefix}.{name}", *args, **kwargs
                 )
+
 
             func.__name__ = name
             func.__doc__ = "Unknown (TODO)"
             return func
         elif name in self._exports["values"]:
-            return self._client.stub_request(
-                None, OP_GETVAL, "%s.%s" % (self._prefix, name)
-            )
+            return self._client.stub_request(None, OP_GETVAL, f"{self._prefix}.{name}")
         elif name in self._exception_classes:
             return self._exception_classes[name]
         else:
@@ -94,9 +91,7 @@ class _WrappedModule(object):
             object.__setattr__(self, name, value)
             return
         if name in self._exports["values"]:
-            self._client.stub_request(
-                None, OP_SETVAL, "%s.%s" % (self._prefix, name), value
-            )
+            self._client.stub_request(None, OP_SETVAL, f"{self._prefix}.{name}", value)
         elif name in self._exports["classes"] or name in self._exports["functions"]:
             raise ValueError
         else:
@@ -116,10 +111,8 @@ class ModuleImporter(object):
 
     def find_module(self, fullname, path=None):
         if self._handled_modules is not None:
-            if fullname in self._handled_modules:
-                return self
-            return None
-        if any([fullname.startswith(prefix) for prefix in self._module_prefixes]):
+            return self if fullname in self._handled_modules else None
+        if any(fullname.startswith(prefix) for prefix in self._module_prefixes):
             # We potentially handle this
             return self
         return None
@@ -162,9 +155,9 @@ class ModuleImporter(object):
             ex_overrides = {}
             for override in overrides.__dict__.values():
                 if isinstance(override, LocalException):
-                    cur_ex = ex_overrides.get(override.class_path, None)
+                    cur_ex = ex_overrides.get(override.class_path)
                     if cur_ex is not None:
-                        raise ValueError("Exception %s redefined" % override.class_path)
+                        raise ValueError(f"Exception {override.class_path} redefined")
                     ex_overrides[override.class_path] = override.wrapped_class
 
             # Now look at the exceptions coming from the server
@@ -173,11 +166,8 @@ class ModuleImporter(object):
                 # Exception is a tuple (name, (parents,))
                 # Exceptions are also given in order of instantiation (ie: the
                 # server already topologically sorted them)
-                ex_class_dict = ex_overrides.get(ex_name, None)
-                if ex_class_dict is None:
-                    ex_class_dict = {}
-                else:
-                    ex_class_dict = dict(ex_class_dict.__dict__)
+                ex_class_dict = ex_overrides.get(ex_name)
+                ex_class_dict = {} if ex_class_dict is None else dict(ex_class_dict.__dict__)
                 parents = []
                 for fake_base in ex_parents:
                     if fake_base.startswith("builtins."):
@@ -246,8 +236,7 @@ def create_modules(python_path, max_pickle_version, path, prefixes):
             pass
         else:
             # pass
-            raise RuntimeError(
-                "Trying to override %s when module exists in system" % prefix)
+            raise RuntimeError(f"Trying to override {prefix} when module exists in system")
 
     # The first version forces the use of the environment escape even if the module
     # exists in the system. This is useful for testing to make sure that the

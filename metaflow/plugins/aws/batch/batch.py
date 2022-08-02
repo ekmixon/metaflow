@@ -75,11 +75,8 @@ class Batch(object):
         # the `true` command is to make sure that the generated command
         # plays well with docker containers which have entrypoint set as
         # eval $@
-        cmd_str = "true && mkdir -p /logs && %s && %s && %s; " % (
-            mflog_expr,
-            init_expr,
-            step_expr,
-        )
+        cmd_str = f"true && mkdir -p /logs && {mflog_expr} && {init_expr} && {step_expr}; "
+
         # after the task has finished, we save its exit code (fail/success)
         # and persist the final logs. The whole entrypoint should exit
         # with the exit code (c) of the task.
@@ -87,18 +84,22 @@ class Batch(object):
         # Note that if step_expr OOMs, this tail expression is never executed.
         # We lose the last logs in this scenario (although they are visible
         # still through AWS CloudWatch console).
-        cmd_str += "c=$?; %s; exit $c" % BASH_SAVE_LOGS
+        cmd_str += f"c=$?; {BASH_SAVE_LOGS}; exit $c"
         return shlex.split('bash -c "%s"' % cmd_str)
 
     def _search_jobs(self, flow_name, run_id, user):
-        if user is None:
-            regex = "-{flow_name}-".format(flow_name=flow_name)
-        else:
-            regex = "{user}-{flow_name}-".format(user=user, flow_name=flow_name)
-        jobs = []
-        for job in self._client.unfinished_jobs():
-            if regex in job["jobName"]:
-                jobs.append(job["jobId"])
+        regex = (
+            "-{flow_name}-".format(flow_name=flow_name)
+            if user is None
+            else "{user}-{flow_name}-".format(user=user, flow_name=flow_name)
+        )
+
+        jobs = [
+            job["jobId"]
+            for job in self._client.unfinished_jobs()
+            if regex in job["jobName"]
+        ]
+
         if run_id is not None:
             run_id = run_id[run_id.startswith("sfn-") and len("sfn-") :]
         for job in self._client.describe_jobs(jobs):
@@ -151,10 +152,7 @@ class Batch(object):
                     )
                 )
             except Exception as e:
-                echo(
-                    "Failed to terminate AWS Batch job %s [%s]"
-                    % (job["jobId"], repr(e))
-                )
+                echo(f'Failed to terminate AWS Batch job {job["jobId"]} [{repr(e)}]')
         if not found:
             echo("No running AWS Batch jobs found.")
 
@@ -264,11 +262,11 @@ class Batch(object):
     ):
         if queue is None:
             queue = next(self._client.active_job_queues(), None)
-            if queue is None:
-                raise BatchException(
-                    "Unable to launch AWS Batch job. No job queue "
-                    " specified and no valid & enabled queue found."
-                )
+        if queue is None:
+            raise BatchException(
+                "Unable to launch AWS Batch job. No job queue "
+                " specified and no valid & enabled queue found."
+            )
         job = self.create_job(
                         step_name,
                         step_cli,
@@ -296,20 +294,12 @@ class Batch(object):
     def wait(self, stdout_location, stderr_location, echo=None):
         def wait_for_launch(job):
             status = job.status
-            echo(
-                "Task is starting (status %s)..." % status,
-                "stderr",
-                batch_id=job.id,
-            )
+            echo(f"Task is starting (status {status})...", "stderr", batch_id=job.id)
             t = time.time()
             while True:
                 if status != job.status or (time.time() - t) > 30:
                     status = job.status
-                    echo(
-                        "Task is starting (status %s)..." % status,
-                        "stderr",
-                        batch_id=job.id,
-                    )
+                    echo(f"Task is starting (status {status})...", "stderr", batch_id=job.id)
                     t = time.time()
                 if job.is_running or job.is_done or job.is_crashed:
                     break
@@ -328,10 +318,11 @@ class Batch(object):
                     echo(line.strip().decode("utf-8", errors="replace"), stream)
             except Exception as ex:
                 echo(
-                    "[ temporary error in fetching logs: %s ]" % ex,
+                    f"[ temporary error in fetching logs: {ex} ]",
                     "stderr",
                     batch_id=self.job.id,
                 )
+
 
         stdout_tail = S3Tail(stdout_location)
         stderr_tail = S3Tail(stderr_location)
@@ -394,7 +385,7 @@ class Batch(object):
                 # Kill the job if it is still running by throwing an exception.
                 raise BatchException("Task failed!")
             echo(
-                "Task finished with exit code %s." % self.job.status_code,
+                f"Task finished with exit code {self.job.status_code}.",
                 "stderr",
                 batch_id=self.job.id,
             )

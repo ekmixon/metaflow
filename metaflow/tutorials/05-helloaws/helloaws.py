@@ -19,7 +19,7 @@ class HelloAWSFlow(FlowSpec):
 
         print("HelloAWS is starting.")
         print("")
-        print("Using metadata provider: %s" % get_metadata())
+        print(f"Using metadata provider: {get_metadata()}")
         print("")
         print("The start step is running locally. Next, the ")
         print("'hello' step will run remotely on AWS batch. ")
@@ -41,7 +41,7 @@ class HelloAWSFlow(FlowSpec):
 
         """
         self.message = 'Hi from AWS!'
-        print("Metaflow says: %s" % self.message)
+        print(f"Metaflow says: {self.message}")
         self.next(self.end)
 
     @step

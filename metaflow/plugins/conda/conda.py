@@ -80,7 +80,7 @@ class Conda(object):
         for env in envs:
             if '/envs/' in env:
                 name = os.path.basename(env)
-                if name.startswith('metaflow_%s' % flow):
+                if name.startswith(f'metaflow_{flow}'):
                     ret[name] = env
         return ret
 
@@ -143,7 +143,7 @@ class Conda(object):
         exact_deps = []
         urls = []
         for package in self.package_info(env_id):
-            exact_deps.append('%s=%s=%s' % (package['name'], package['version'], package['build']))
+            exact_deps.append(f"{package['name']}={package['version']}={package['build']}")
             urls.append(package['url'])
         order = self._install_order(env_id)
         return (exact_deps, urls, order)
@@ -164,9 +164,10 @@ class Conda(object):
         try:
             env = {
                 'CONDA_JSON': 'True',
-                'CONDA_SUBDIR': (architecture if architecture else ''),
-                'CONDA_USE_ONLY_TAR_BZ2': 'True'
+                'CONDA_SUBDIR': architecture or '',
+                'CONDA_USE_ONLY_TAR_BZ2': 'True',
             }
+
             if disable_safety_checks:
                 env['CONDA_SAFETY_CHECKS'] = 'disabled'
             return subprocess.check_output(
@@ -177,8 +178,7 @@ class Conda(object):
             try:
                 output = json.loads(e.output)
                 err = [output['error']]
-                for error in output.get('errors', []):
-                    err.append(error['error'])
+                err.extend(error['error'] for error in output.get('errors', []))
                 raise CondaException(err)
             except (TypeError, ValueError) as ve:
                 pass
@@ -212,11 +212,9 @@ class CondaLock(object):
                 if e.errno != errno.EEXIST:
                     raise
                 if self.timeout is None:
-                    raise CondaException(
-                        'Could not acquire lock {}'.format(self.lock))
+                    raise CondaException(f'Could not acquire lock {self.lock}')
                 if (time.time() - start) >= self.timeout:
-                    raise CondaException(
-                        'Timeout occurred while acquiring lock {}'.format(self.lock))
+                    raise CondaException(f'Timeout occurred while acquiring lock {self.lock}')
                 time.sleep(self.delay)
 
     def _release(self):

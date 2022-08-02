@@ -17,7 +17,7 @@ from metaflow_test.formatter import FlowFormatter
 def iter_graphs():
     root = os.path.join(os.path.dirname(__file__), 'graphs')
     for graphfile in os.listdir(root):
-        if graphfile.endswith('.json') and not graphfile[0] == '.':
+        if graphfile.endswith('.json') and graphfile[0] != '.':
             with open(os.path.join(root, graphfile)) as f:
                 yield json.load(f)
 
@@ -25,7 +25,7 @@ def iter_tests():
     root = os.path.join(os.path.dirname(__file__), 'tests')
     sys.path.insert(0, root)
     for testfile in os.listdir(root):
-        if testfile.endswith('.py') and not testfile[0] == '.':
+        if testfile.endswith('.py') and testfile[0] != '.':
             mod = importlib.import_module(testfile[:-3], 'metaflow_test')
             for name in dir(mod):
                 obj = getattr(mod, name)
@@ -35,16 +35,9 @@ def iter_tests():
                     yield obj()
 
 def log(msg, formatter=None, context=None, real_bad=False, real_good=False):
-    cstr = ''
-    fstr = ''
-    if context:
-        cstr = " in context '%s'" % context['name']
-    if formatter:
-        fstr = ' %s' % formatter
-    if cstr or fstr:
-        line = "###%s%s: %s ###" % (fstr, cstr, msg)
-    else:
-        line = "### %s ###" % msg
+    cstr = " in context '%s'" % context['name'] if context else ''
+    fstr = f' {formatter}' if formatter else ''
+    line = f"###{fstr}{cstr}: {msg} ###" if cstr or fstr else f"### {msg} ###"
     if real_bad:
         line = click.style(line, fg='red', bold=True)
     elif real_good:
@@ -53,7 +46,7 @@ def log(msg, formatter=None, context=None, real_bad=False, real_good=False):
         line = click.style(line, fg='white', bold=True)
 
     pid = os.getpid()
-    click.echo('[pid %s] %s' % (pid, line))
+    click.echo(f'[pid {pid}] {line}')
 
 def copy_coverage_files(dstdir):
     for fname in glob.glob('.coverage.*'):
@@ -91,15 +84,25 @@ def run_test(formatter, context, coverage_dir, debug, checks, env_base):
         # nonce can be used to insert entropy in env vars.
         # This is useful e.g. for separating S3 paths of
         # runs, which may have clashing run_ids
-        env.update(dict((k, v.format(nonce=str(uuid.uuid4())))
-                   for k, v in context['env'].items()))
+        env.update(
+            {
+                k: v.format(nonce=str(uuid.uuid4()))
+                for k, v in context['env'].items()
+            }
+        )
+
 
         pythonpath = os.environ.get('PYTHONPATH', '.')
-        env.update({'LANG': 'C.UTF-8',
-                    'LC_ALL': 'C.UTF-8',
-                    'PATH': os.environ.get('PATH', '.'),
-                    'PYTHONIOENCODING': 'utf_8',
-                    'PYTHONPATH': "%s:%s" % (package, pythonpath)})
+        env.update(
+            {
+                'LANG': 'C.UTF-8',
+                'LC_ALL': 'C.UTF-8',
+                'PATH': os.environ.get('PATH', '.'),
+                'PYTHONIOENCODING': 'utf_8',
+                'PYTHONPATH': f"{package}:{pythonpath}",
+            }
+        )
+
 
         if 'pre_command' in context:
             if context['pre_command'].get('metaflow_command'):
@@ -171,11 +174,7 @@ def run_all(ok_tests,
              if not ok_tests or test.__class__.__name__.lower() in ok_tests]
     failed = []
 
-    if inherit_env:
-        base_env = dict(os.environ)
-    else:
-        base_env = {}
-
+    base_env = dict(os.environ) if inherit_env else {}
     if debug or num_parallel is None:
         for test in tests:
             failed.extend(run_test_cases((test,
@@ -196,7 +195,7 @@ def run_test_cases(args):
     contexts = json.load(open('contexts.json'))
     graphs = list(iter_graphs())
     test_name = test.__class__.__name__
-    log('Loaded test %s' % test_name)
+    log(f'Loaded test {test_name}')
     failed = []
 
     for graph in graphs:
@@ -229,8 +228,7 @@ def run_test_cases(args):
                                      base_env)
 
                 if ret:
-                    tstid = '%s in context %s' % (formatter,
-                                                  context['name'])
+                    tstid = f"{formatter} in context {context['name']}"
                     failed.append((tstid, path))
                     log("failed", formatter, context, real_bad=True)
                     if debug:
@@ -242,18 +240,15 @@ def run_test_cases(args):
     return failed
 
 def produce_coverage_report(coverage_dir, coverage_output):
-    COVERAGE = sys.executable + ' -m coverage '
+    COVERAGE = f'{sys.executable} -m coverage '
     cwd = os.getcwd()
     try:
         os.chdir(coverage_dir)
         if os.listdir('.'):
-            subprocess.check_call(COVERAGE + 'combine .coverage*', shell=True)
-            subprocess.check_call(COVERAGE + 'xml -o %s.xml' % coverage_output,
-                                  shell=True)
-            subprocess.check_call(COVERAGE + 'html -d %s' % coverage_output,
-                                  shell=True)
-            log("Coverage report written to %s" % coverage_output,
-                real_good=True)
+            subprocess.check_call(f'{COVERAGE}combine .coverage*', shell=True)
+            subprocess.check_call(COVERAGE + f'xml -o {coverage_output}.xml', shell=True)
+            subprocess.check_call(COVERAGE + f'html -d {coverage_output}', shell=True)
+            log(f"Coverage report written to {coverage_output}", real_good=True)
         else:
             log("No coverage data was produced", real_bad=True)
     finally:
@@ -319,7 +314,7 @@ def cli(tests=None,
             log("The following tests failed:")
             for fail, path in failed:
                 if debug:
-                    log('%s (path %s)' % (fail, path), real_bad=True)
+                    log(f'{fail} (path {path})', real_bad=True)
                 else:
                     log(fail, real_bad=True)
             sys.exit(1)

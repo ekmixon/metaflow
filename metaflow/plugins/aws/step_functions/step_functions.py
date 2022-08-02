@@ -79,11 +79,11 @@ class StepFunctions(object):
             # that can translate cron specifications into a human readable 
             # format and push to the user for a better UX, someday.
             return 'This workflow triggers automatically '\
-                'via a cron schedule *%s* defined in AWS EventBridge.' \
-                % self.event_bridge_rule
+                    'via a cron schedule *%s* defined in AWS EventBridge.' \
+                    % self.event_bridge_rule
         else:
             return 'No triggers defined. '\
-                'You need to launch this workflow manually.'
+                    'You need to launch this workflow manually.'
 
     def deploy(self, log_execution_history):
         if SFN_IAM_ROLE is None:
@@ -96,15 +96,14 @@ class StepFunctions(object):
                                          "re-configure Metaflow using "
                                          "*metaflow configure aws* on your "
                                          "terminal.")
-        if log_execution_history:
-            if SFN_EXECUTION_LOG_GROUP_ARN is None:
-                raise StepFunctionsException("No AWS CloudWatch Logs log "
-                                             "group ARN found for emitting "
-                                             "state machine execution logs for "
-                                             "your workflow. You can set it in "
-                                             "your environment by using the "
-                                             "METAFLOW_SFN_EXECUTION_LOG_GROUP_ARN "
-                                             "environment variable.")
+        if log_execution_history and SFN_EXECUTION_LOG_GROUP_ARN is None:
+            raise StepFunctionsException("No AWS CloudWatch Logs log "
+                                         "group ARN found for emitting "
+                                         "state machine execution logs for "
+                                         "your workflow. You can set it in "
+                                         "your environment by using the "
+                                         "METAFLOW_SFN_EXECUTION_LOG_GROUP_ARN "
+                                         "environment variable.")
         try:
             self._state_machine_arn = self._client.push(
                     name = self.name, 
@@ -213,8 +212,8 @@ class StepFunctions(object):
             # state. That's why even though `JobId` refers to the parent task 
             # id, we can't call it as such. Similar situation for `Parameters`.
             state = State(node.name) \
-                        .batch(self._batch(node)) \
-                        .output_path('$.[\'JobId\', '
+                            .batch(self._batch(node)) \
+                            .output_path('$.[\'JobId\', '
                                     '\'Parameters\', '
                                     '\'Index\', '
                                     '\'SplitParentTaskId\']')
@@ -222,20 +221,16 @@ class StepFunctions(object):
             # the parent step of matching_join of the sub workflow.
             if node.type == 'end' or exit_node in node.out_funcs:
                 workflow.add_state(state.end())
-            # Continue linear assignment within the (sub)workflow if the node 
-            # doesn't branch or fork.
             elif node.type in ('linear', 'join'):
                 workflow.add_state(state.next(node.out_funcs[0]))
                 _visit(self.graph[node.out_funcs[0]], workflow, exit_node)
-            # Create a `Parallel` state and assign sub workflows if the node
-            # branches out.
             elif node.type == 'split-and':
                 branch_name = hashlib.sha224('&'.join(node.out_funcs) \
-                                     .encode('utf-8')) \
-                                     .hexdigest()
+                                         .encode('utf-8')) \
+                                         .hexdigest()
                 workflow.add_state(state.next(branch_name))
                 branch = Parallel(branch_name) \
-                            .next(node.matching_join)
+                                .next(node.matching_join)
                 # Generate as many sub workflows as branches and recurse.
                 for n in node.out_funcs:
                     branch.branch(
@@ -246,38 +241,36 @@ class StepFunctions(object):
                 workflow.add_state(branch)
                 # Continue the traversal from the matching_join.
                 _visit(self.graph[node.matching_join], workflow, exit_node)
-            # Create a `Map` state and assign sub workflow if the node forks.
             elif node.type == 'foreach':
                 # Fetch runtime cardinality via an AWS DynamoDb Get call before
                 # configuring the node
-                cardinality_state_name = '#%s' % node.out_funcs[0]
+                cardinality_state_name = f'#{node.out_funcs[0]}'
                 workflow.add_state(state.next(cardinality_state_name))
                 cardinality_state = State(cardinality_state_name) \
-                                        .dynamo_db(SFN_DYNAMO_DB_TABLE, 
+                                            .dynamo_db(SFN_DYNAMO_DB_TABLE, 
                                             '$.JobId', 
                                             'for_each_cardinality') \
-                                        .result_path('$.Result')
-                iterator_name = '*%s' % node.out_funcs[0]
+                                            .result_path('$.Result')
+                iterator_name = f'*{node.out_funcs[0]}'
                 workflow.add_state(cardinality_state.next(iterator_name))
                 workflow.add_state(
                     Map(iterator_name) \
-                        .items_path('$.Result.Item.for_each_cardinality.NS') \
-                        .parameter('JobId.$', '$.JobId') \
-                        .parameter('SplitParentTaskId.$', '$.JobId') \
-                        .parameter('Parameters.$', '$.Parameters') \
-                        .parameter('Index.$', '$$.Map.Item.Value') \
-                        .next(node.matching_join) \
-                        .iterator(
+                            .items_path('$.Result.Item.for_each_cardinality.NS') \
+                            .parameter('JobId.$', '$.JobId') \
+                            .parameter('SplitParentTaskId.$', '$.JobId') \
+                            .parameter('Parameters.$', '$.Parameters') \
+                            .parameter('Index.$', '$$.Map.Item.Value') \
+                            .next(node.matching_join) \
+                            .iterator(
                             _visit(
                                 self.graph[node.out_funcs[0]], 
                                 Workflow(node.out_funcs[0]) \
-                                    .start_at(node.out_funcs[0]), 
+                                        .start_at(node.out_funcs[0]), 
                                 node.matching_join)) \
-                        .max_concurrency(self.max_workers) \
-                        .output_path('$.[0]'))
+                            .max_concurrency(self.max_workers) \
+                            .output_path('$.[0]'))
                 # Continue the traversal from the matching_join.
                 _visit(self.graph[node.matching_join], workflow, exit_node)
-            # We shouldn't ideally ever get here.
             else:
                 raise StepFunctionsException("Node type *%s* for  step *%s* "
                                              "is not currently supported by "
@@ -286,14 +279,13 @@ class StepFunctions(object):
             return workflow
 
         workflow = Workflow(self.name) \
-                        .start_at('start')
+                            .start_at('start')
         if self.workflow_timeout:
             workflow.timeout_seconds(self.workflow_timeout)
         return _visit(self.graph['start'], workflow)
 
     def _cron(self):
-        schedule = self.flow._flow_decorators.get('schedule')
-        if schedule:
+        if schedule := self.flow._flow_decorators.get('schedule'):
             return schedule.schedule
         return None
 

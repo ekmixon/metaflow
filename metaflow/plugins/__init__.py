@@ -104,7 +104,7 @@ def _merge_lists(base, overrides, attr):
     # is present in overrides and matches (according to the equality criterion) a class in
     # base, it will be used instead of the one in base.
     l = list(overrides)
-    existing = set([getattr(o, attr) for o in overrides])
+    existing = {getattr(o, attr) for o in overrides}
     l.extend([d for d in base if getattr(d, attr) not in existing])
     return l
 
@@ -163,19 +163,19 @@ from metaflow.metadata.heartbeat import MetadataHeartBeat
 
 SIDECARS = {'save_logs_periodically': SaveLogsPeriodicallySidecar,
             'heartbeat': MetadataHeartBeat}
-SIDECARS.update(_ext_plugins.SIDECARS)
+SIDECARS |= _ext_plugins.SIDECARS
 
 # Add logger
 from .debug_logger import DebugEventLogger
 LOGGING_SIDECARS = {'debugLogger': DebugEventLogger,
                     'nullSidecarLogger': None}
-LOGGING_SIDECARS.update(_ext_plugins.LOGGING_SIDECARS)
+LOGGING_SIDECARS |= _ext_plugins.LOGGING_SIDECARS
 
 # Add monitor
 from .debug_monitor import DebugMonitor
 MONITOR_SIDECARS = {'debugMonitor': DebugMonitor,
                     'nullSidecarMonitor': None}
-MONITOR_SIDECARS.update(_ext_plugins.MONITOR_SIDECARS)
+MONITOR_SIDECARS |= _ext_plugins.MONITOR_SIDECARS
 
 SIDECARS.update(LOGGING_SIDECARS)
 SIDECARS.update(MONITOR_SIDECARS)

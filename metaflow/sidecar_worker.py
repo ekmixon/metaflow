@@ -23,15 +23,13 @@ class WorkershutdownError(Exception):
 def process_messages(worker):
     while True:
         try:
-            msg = sys.stdin.readline().strip()
-            if msg:
-                parsed_msg = deserialize(msg)
-                if parsed_msg.msg_type == MessageTypes.SHUTDOWN:
-                    raise WorkershutdownError()
-                else:
-                    worker.process_message(parsed_msg)
-            else:
+            if not (msg := sys.stdin.readline().strip()):
                 raise WorkershutdownError()
+            parsed_msg = deserialize(msg)
+            if parsed_msg.msg_type == MessageTypes.SHUTDOWN:
+                raise WorkershutdownError()
+            else:
+                worker.process_message(parsed_msg)
         except WorkershutdownError:
             break
         except Exception as e:  # todo handle other possible exceptions gracefully
@@ -52,7 +50,7 @@ def main(worker_type):
     if worker_process is not None:
         process_messages(worker_process())
     else:
-        print("UNRECOGNIZED WORKER: %s" % worker_type, file=sys.stderr)
+        print(f"UNRECOGNIZED WORKER: {worker_type}", file=sys.stderr)
 
 
 if __name__ == "__main__":

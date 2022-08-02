@@ -21,7 +21,7 @@ def export_parent_task_ids(output_file):
     input = os.environ['METAFLOW_SPLIT_PARENT_TASK_ID']
     task_ids = DynamoDbClient().get_parent_task_ids_for_foreach_join(input)
     with open(output_file, 'w') as f:
-        f.write('export METAFLOW_PARENT_TASK_IDS=%s' % ','.join(task_ids))
+        f.write(f"export METAFLOW_PARENT_TASK_IDS={','.join(task_ids)}")
     os.chmod(output_file, 509)
 
 

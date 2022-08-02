@@ -120,7 +120,7 @@ def step(
     def echo(msg, stream="stderr", job_id=None):
         msg = util.to_unicode(msg)
         if job_id:
-            msg = "[%s] %s" % (job_id, msg)
+            msg = f"[{job_id}] {msg}"
         ctx.obj.echo_always(msg, err=(stream == sys.stderr))
 
     node = ctx.obj.graph[step_name]
@@ -145,7 +145,7 @@ def step(
             % (i // max_size): input_paths[i : i + max_size]
             for i in range(0, len(input_paths), max_size)
         }
-        kwargs["input_paths"] = "".join("${%s}" % s for s in split_vars.keys())
+        kwargs["input_paths"] = "".join("${%s}" % s for s in split_vars)
         env.update(split_vars)
 
     # Set retry policy.
@@ -164,11 +164,12 @@ def step(
         time.sleep(minutes_between_retries * 60)
 
     step_cli = u"{entrypoint} {top_args} step {step} {step_args}".format(
-        entrypoint="%s -u %s" % (executable, os.path.basename(sys.argv[0])),
+        entrypoint=f"{executable} -u {os.path.basename(sys.argv[0])}",
         top_args=" ".join(util.dict_to_cli_options(ctx.parent.parent.params)),
         step=step_name,
         step_args=" ".join(util.dict_to_cli_options(kwargs)),
     )
+
 
     # this information is needed for log tailing
     ds = ctx.obj.flow_datastore.get_task_datastore(
@@ -176,8 +177,9 @@ def step(
         run_id=kwargs['run_id'],
         step_name=step_name,
         task_id=kwargs['task_id'],
-        attempt=int(retry_count)
+        attempt=retry_count,
     )
+
     stdout_location = ds.get_log_location(TASK_LOG_SOURCE, 'stdout')
     stderr_location = ds.get_log_location(TASK_LOG_SOURCE, 'stderr')
 

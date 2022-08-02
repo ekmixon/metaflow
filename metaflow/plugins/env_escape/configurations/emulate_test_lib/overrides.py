@@ -27,33 +27,33 @@ def remote_print_value(obj, func):
 
 @local_getattr_override({"test_lib.TestClass1": "override_value"})
 def local_get_value2(stub, name, func):
-    print("In local getattr override for %s" % name)
+    print(f"In local getattr override for {name}")
     r = func()
-    print("In local getattr override, got %s" % r)
+    print(f"In local getattr override, got {r}")
     return r
 
 
 @local_setattr_override({"test_lib.TestClass1": "override_value"})
 def local_set_value2(stub, name, func, v):
-    print("In local setattr override for %s" % name)
+    print(f"In local setattr override for {name}")
     r = func(v)
-    print("In local setattr override, got %s" % r)
+    print(f"In local setattr override, got {r}")
     return r
 
 
 @remote_getattr_override({"test_lib.TestClass1": "override_value"})
 def remote_get_value2(obj, name):
-    print("In remote getattr override for %s" % name)
+    print(f"In remote getattr override for {name}")
     r = getattr(obj, name)
-    print("In remote getattr override, got %s" % r)
+    print(f"In remote getattr override, got {r}")
     return r
 
 
 @remote_setattr_override({"test_lib.TestClass1": "override_value"})
 def remote_set_value2(obj, name, v):
-    print("In remote setattr override for %s" % name)
+    print(f"In remote setattr override for {name}")
     r = setattr(obj, name, v)
-    print("In remote setattr override, got %s" % r)
+    print(f"In remote setattr override, got {r}")
     return r
 
 
@@ -65,22 +65,20 @@ def unsupported_method(stub, func, *args, **kwargs):
 @local_override({"test_lib.package.TestClass3": "thirdfunction"})
 def iamthelocalthird(stub, func, val):
     print("Locally the Third")
-    v = func(val)
-    return v
+    return func(val)
 
 
 @remote_override({"test_lib.package.TestClass3": "thirdfunction"})
 def iamtheremotethird(obj, func, val):
     print("Remotely the Third")
-    v = func(val)
-    return v
+    return func(val)
 
 
 @local_exception("test_lib.SomeException")
 class SomeException:
     def __str__(self):
         parent_val = super(self.__realclass__, self).__str__()
-        return parent_val + " In SomeException str override: %s" % self.user_value
+        return parent_val + f" In SomeException str override: {self.user_value}"
 
     def _deserialize_user(self, json_obj):
         self.user_value = json_obj

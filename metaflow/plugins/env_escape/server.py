@@ -74,11 +74,10 @@ class Server(object):
         self._known_vals, a3 = self._flatten_dict(mappings.EXPORTED_VALUES)
         self._known_exceptions, a4 = self._flatten_dict(mappings.EXPORTED_EXCEPTIONS)
         self._proxied_types = {
-            "%s.%s" % (t.__module__, t.__name__): t for t in mappings.PROXIED_CLASSES
+            f"{t.__module__}.{t.__name__}": t for t in mappings.PROXIED_CLASSES
         }
-        self._class_types_to_names.update(
-            {v: k for k, v in self._proxied_types.items()}
-        )
+
+        self._class_types_to_names |= {v: k for k, v in self._proxied_types.items()}
 
         # We will also proxy functions from objects as needed. This is useful
         # for defaultdict for example since the `default_factory` function is a
@@ -91,8 +90,7 @@ class Server(object):
             for alias in aliases:
                 a = self._aliases.setdefault(alias, base_name)
                 if a != base_name:
-                    raise ValueError(
-                        "%s is an alias to both %s and %s" % (alias, base_name, a))
+                    raise ValueError(f"{alias} is an alias to both {base_name} and {a}")
 
         # Determine if we have any overrides
         self._overrides = {}
@@ -118,15 +116,11 @@ class Server(object):
                         obj_funcs = (obj_funcs,)
                     for name in obj_funcs:
                         if name in override_dict:
-                            raise ValueError(
-                                "%s was already overridden for %s" % (name, obj_name)
-                            )
+                            raise ValueError(f"{name} was already overridden for {obj_name}")
                         override_dict[name] = override.func
             elif isinstance(override, RemoteExceptionSerializer):
                 if override.class_path in self._exception_serializers:
-                    raise ValueError(
-                        "%s exception serializer already defined" % override.class_path
-                    )
+                    raise ValueError(f"{override.class_path} exception serializer already defined")
                 self._exception_serializers[override.class_path] = override.serializer
 
         # Process the exceptions making sure we have all the ones we need and building a
@@ -140,24 +134,23 @@ class Server(object):
             for base in ex_cls.__mro__[1:]:
                 if base is object:
                     raise ValueError(
-                        "Exported exceptions not rooted in a builtin exception are not supported: %s"
-                        % ex_name
+                        f"Exported exceptions not rooted in a builtin exception are not supported: {ex_name}"
                     )
+
                 if base.__module__ == "builtins":
                     # We found our base exception
-                    parents.append("builtins." + base.__name__)
+                    parents.append(f"builtins.{base.__name__}")
                     break
                 else:
                     fqn = ".".join([base.__module__, base.__name__])
-                    if fqn in self._known_exceptions:
-                        parents.append(fqn)
-                        children = parent_to_child.setdefault(fqn, [])
-                        children.append(ex_name)
-                    else:
+                    if fqn not in self._known_exceptions:
                         raise ValueError(
                             "Exported exception %s has non exported and non builtin parent "
                             "exception: %s" % (ex_name, fqn)
                         )
+                    parents.append(fqn)
+                    children = parent_to_child.setdefault(fqn, [])
+                    children.append(ex_name)
             name_to_parent_count[ex_name] = len(parents) - 1
             name_to_parents[ex_name] = parents
 
@@ -165,10 +158,9 @@ class Server(object):
         # the proper order (topologically)
         self._known_exceptions = []
         # Find roots
-        to_process = []
-        for name, count in name_to_parent_count.items():
-            if count == 0:
-                to_process.append(name)
+        to_process = [
+            name for name, count in name_to_parent_count.items() if count == 0
+        ]
 
         # Topologically process the exceptions
         while to_process:
@@ -186,8 +178,9 @@ class Server(object):
 
         if name_to_parent_count:
             raise ValueError(
-                "Badly rooted exceptions: %s" % ", ".join(name_to_parent_count.keys())
+                f'Badly rooted exceptions: {", ".join(name_to_parent_count.keys())}'
             )
+
         self._active = False
         self._channel = None
         self._datatransferer = DataTransferer(self)
@@ -246,14 +239,12 @@ class Server(object):
 
     def encode_exception(self, ex_type, ex, trace_back):
         try:
-            full_name = "%s.%s" % (ex_type.__module__, ex_type.__name__)
+            full_name = f"{ex_type.__module__}.{ex_type.__name__}"
             serializer = self._exception_serializers.get(full_name)
         except AttributeError:
             # Ignore if no __module__ for example -- definitely not something we built
             serializer = None
-        extra_content = None
-        if serializer is not None:
-            extra_content = serializer(ex)
+        extra_content = serializer(ex) if serializer is not None else None
         return dump_exception(self._datatransferer, ex_type, ex, trace_back, extra_content)
 
     def decode(self, json_obj):
@@ -283,7 +274,7 @@ class Server(object):
                 else:
                     raise ValueError("Unknown control message")
             if json_request[FIELD_MSGTYPE] != MSG_OP:
-                raise ValueError("Invalid message received: %s" % json_request)
+                raise ValueError(f"Invalid message received: {json_request}")
             op_type = json_request[FIELD_OPTYPE]
             op_target = json_request.get(FIELD_TARGET)
             if op_target is not None:
@@ -333,17 +324,17 @@ class Server(object):
         identifier = id(obj)
         mapped_class_name = self._class_types_to_names.get(type(obj))
         if mapped_class_name is None:
-            raise ValueError("Cannot proxy value of type %s" % type(obj))
+            raise ValueError(f"Cannot proxy value of type {type(obj)}")
         self._local_objects[identifier] = obj
         return ObjReference(VALUE_REMOTE, mapped_class_name, identifier)
 
     def unpickle_object(self, obj):
         if (not isinstance(obj, ObjReference)) or obj.value_type != VALUE_LOCAL:
-            raise ValueError("Invalid transferred object: %s" % str(obj))
-        obj = self._local_objects.get(obj.identifier)
-        if obj:
+            raise ValueError(f"Invalid transferred object: {str(obj)}")
+        if obj := self._local_objects.get(obj.identifier):
             return obj
-        raise ValueError("Invalid object -- id %s not known" % obj.identifier)
+        else:
+            raise ValueError(f"Invalid object -- id {obj.identifier} not known")
 
     @staticmethod
     def _flatten_dict(d):
@@ -357,22 +348,18 @@ class Server(object):
                 aliases[base[0]] = list(base[1:])
                 base = base[0]
             for name, value in values.items():
-                result["%s.%s" % (base, name)] = value
+                result[f"{base}.{name}"] = value
         return result, aliases
 
     def _handle_getattr(self, target, name):
-        override_mapping = self._getattr_overrides.get(type(target))
-        if override_mapping:
-            override_func = override_mapping.get(name)
-            if override_func:
+        if override_mapping := self._getattr_overrides.get(type(target)):
+            if override_func := override_mapping.get(name):
                 return override_func(target, name)
         return getattr(target, name)
 
     def _handle_setattr(self, target, name, value):
-        override_mapping = self._setattr_overrides.get(type(target))
-        if override_mapping:
-            override_func = override_mapping.get(name)
-            if override_func:
+        if override_mapping := self._setattr_overrides.get(type(target)):
+            if override_func := override_mapping.get(name):
                 return override_func(target, name, value)
         return setattr(target, name, value)
 
@@ -384,10 +371,8 @@ class Server(object):
 
     def _handle_callattr(self, target, name, *args, **kwargs):
         attr = getattr(target, name)
-        override_mapping = self._overrides.get(type(target))
-        if override_mapping:
-            override_func = override_mapping.get(name)
-            if override_func:
+        if override_mapping := self._overrides.get(type(target)):
+            if override_func := override_mapping.get(name):
                 return override_func(target, attr, *args, **kwargs)
         return attr(*args, **kwargs)
 
@@ -412,7 +397,7 @@ class Server(object):
         if class_type is None:
             class_type = self._proxied_types.get(class_name)
         if class_type is None:
-            raise ValueError("Unknown class %s" % class_name)
+            raise ValueError(f"Unknown class {class_name}")
         return get_methods(class_type)
 
     def _handle_dir(self, target):
@@ -421,18 +406,16 @@ class Server(object):
     def _handle_callfunc(self, target, name, *args, **kwargs):
         func_to_call = self._known_funcs.get(name)
         if func_to_call is None:
-            raise ValueError("Unknown function %s" % name)
+            raise ValueError(f"Unknown function {name}")
         return func_to_call(*args, **kwargs)
 
     def _handle_callonclass(self, target, class_name, name, is_static, *args, **kwargs):
         class_type = self._known_classes.get(class_name)
         if class_type is None:
-            raise ValueError("Unknown class for static/class method %s" % class_name)
+            raise ValueError(f"Unknown class for static/class method {class_name}")
         attr = getattr(class_type, name)
-        override_mapping = self._overrides.get(class_type)
-        if override_mapping:
-            override_func = override_mapping.get(name)
-            if override_func:
+        if override_mapping := self._overrides.get(class_type):
+            if override_func := override_mapping.get(name):
                 if is_static:
                     return override_func(attr, *args, **kwargs)
                 else:
@@ -443,7 +426,7 @@ class Server(object):
         if name in self._known_vals:
             return self._known_vals[name]
         else:
-            raise ValueError("Unknown value %s" % name)
+            raise ValueError(f"Unknown value {name}")
 
     def _handle_setval(self, target, name, value):
         if name in self._known_vals:
@@ -452,7 +435,7 @@ class Server(object):
     def _handle_init(self, target, class_name, *args, **kwargs):
         class_type = self._known_classes.get(class_name)
         if class_type is None:
-            raise ValueError("Unknown class %s" % class_name)
+            raise ValueError(f"Unknown class {class_name}")
         return class_type(*args, **kwargs)
 
 

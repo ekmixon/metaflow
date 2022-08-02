@@ -17,7 +17,4 @@ def cmd(cmdline, input, output):
         with open(path, 'rb') as f:
             out.append(f.read())
 
-    if len(out) == 1:
-        return out[0]
-    else:
-        return out
+    return out[0] if len(out) == 1 else out

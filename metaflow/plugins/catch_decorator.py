@@ -59,14 +59,12 @@ class CatchDecorator(StepDecorator):
                                     'split steps.' % step)
 
     def _print_exception(self, step, flow):
-        self.logger(head='@catch caught an exception from %s' % flow,
-                    timestamp=False)
+        self.logger(head=f'@catch caught an exception from {flow}', timestamp=False)
         for line in traceback.format_exc().splitlines():
-            self.logger('>  %s' % line, timestamp=False)
+            self.logger(f'>  {line}', timestamp=False)
 
     def _set_var(self, flow, val):
-        var = self.attributes.get('var')
-        if var:
+        if var := self.attributes.get('var'):
             setattr(flow, var, val)
 
     def task_exception(self,

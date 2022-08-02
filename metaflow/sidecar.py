@@ -55,23 +55,26 @@ class SidecarSubProcess(object):
     def start(self):
 
         if (self.__worker_type is not None and \
-                self.__worker_type.startswith(NULL_SIDECAR_PREFIX)) or \
-                (platform.system() == 'Darwin' and sys.version_info < (3, 0)):
-                # if on darwin and running python 2 disable sidecars
-                # there is a bug with importing poll from select in some cases
-                #
-                # TODO: Python 2 shipped by Anaconda allows for 
-                # `from select import poll`. We can consider enabling sidecars
-                # for that distribution if needed at a later date.
-                self.__poller = NullPoller()
+                    self.__worker_type.startswith(NULL_SIDECAR_PREFIX)) or \
+                    (platform.system() == 'Darwin' and sys.version_info < (3, 0)):
+            # if on darwin and running python 2 disable sidecars
+            # there is a bug with importing poll from select in some cases
+            #
+            # TODO: Python 2 shipped by Anaconda allows for 
+            # `from select import poll`. We can consider enabling sidecars
+            # for that distribution if needed at a later date.
+            self.__poller = NullPoller()
 
         else:
             from select import poll
             python_version = sys.executable
-            cmdline = [python_version,
-                       '-u',
-                       os.path.dirname(__file__) + '/sidecar_worker.py',
-                       self.__worker_type]
+            cmdline = [
+                python_version,
+                '-u',
+                f'{os.path.dirname(__file__)}/sidecar_worker.py',
+                self.__worker_type,
+            ]
+
             debug.sidecar_exec(cmdline)
 
             self.__process = self.__start_subprocess(cmdline)
@@ -83,12 +86,11 @@ class SidecarSubProcess(object):
                                        select.POLLOUT)
             else:
                 # unable to start subprocess, fallback to Null sidecar
-                self.logger("unable to start subprocess for sidecar %s"
-                      % self.__worker_type)
+                self.logger(f"unable to start subprocess for sidecar {self.__worker_type}")
                 self.__poller = NullPoller()
 
     def __start_subprocess(self, cmdline):
-        for i in range(3):
+        for _ in range(3):
             try:
                 # Set stdout=sys.stdout & stderr=sys.stderr
                 # to print to console the output of sidecars.
@@ -97,7 +99,7 @@ class SidecarSubProcess(object):
                                         stdout=open(os.devnull, 'w'),
                                         bufsize=0)
             except blockingError as be:
-                self.logger("warning: sidecar popen failed: %s" % repr(be))
+                self.logger(f"warning: sidecar popen failed: {repr(be)}")
             except Exception as e:
                 self.logger(repr(e))
                 break
@@ -134,7 +136,7 @@ class SidecarSubProcess(object):
             self.logger("unable to send message due to timeout")
         except Exception as ex:
             if isinstance(ex, PipeUnavailableError):
-                self.logger("restarting sidecar %s" % self.__worker_type)
+                self.logger(f"restarting sidecar {self.__worker_type}")
                 self.start()
             if retries > 0:
                 self.logger("retrying msg send to sidecar")
@@ -144,4 +146,4 @@ class SidecarSubProcess(object):
                 self.logger(repr(ex))
 
     def logger(self, msg):
-        print("metaflow sidecar logger: " + msg, file=sys.stderr)
+        print(f"metaflow sidecar logger: {msg}", file=sys.stderr)
